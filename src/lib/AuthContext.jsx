@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { dori77 } from '@/api/dori77Client';
 import { PRIVATE_PAGES } from './../pages.config';
 
 const AuthContext = createContext();
@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }) => {
     try {
       // Now check if the user is authenticated
       setIsLoadingAuth(true);
-      const res = await base44.auth.me();
+      const res = await dori77.auth.me();
       setUser(res?.data || null);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
@@ -105,16 +105,16 @@ export const AuthProvider = ({ children }) => {
     
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
-      base44.auth.logout(window.location.href);
+      dori77.auth.logout(window.location.href);
     } else {
       // Just remove the token without redirect
-      base44.auth.logout();
+      dori77.auth.logout();
     }
   };
 
   const navigateToLogin = () => {
     // Use the SDK's redirectToLogin method
-    base44.auth.redirectToLogin(window.location.href);
+    dori77.auth.redirectToLogin(window.location.href);
   };
 
   return (
