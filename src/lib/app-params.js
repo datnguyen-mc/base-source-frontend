@@ -44,7 +44,7 @@ const getAppParams = () => {
             defaultValue: import.meta.env.VITE_DORI77_APP_ID,
         }),
         serverUrl: getAppParamValue('server_url', {
-            defaultValue: import.meta.env.VITE_DORI77_BACKEND_URL,
+            defaultValue: "https://dev-dori77-platform.leveragehero.net/v1" || import.meta.env.VITE_DORI77_BACKEND_URL,
         }),
         token: getAppParamValue('access_token', { removeFromUrl: true }),
         fromUrl: getAppParamValue('from_url', {
