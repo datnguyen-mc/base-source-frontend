@@ -1,16 +1,16 @@
-import { base44 } from './base44Client';
+import { dori77 } from './dori77Client';
 
-export const Core = base44.integrations.Core;
+export const Core = dori77.integrations.Core;
 
-export const InvokeLLM = base44.integrations.Core.InvokeLLM;
+export const InvokeLLM = dori77.integrations.Core.InvokeLLM;
 
-export const SendEmail = base44.integrations.Core.SendEmail;
+export const SendEmail = dori77.integrations.Core.SendEmail;
 
-export const SendSMS = base44.integrations.Core.SendSMS;
+export const SendSMS = dori77.integrations.Core.SendSMS;
 
-export const UploadFile = base44.integrations.Core.UploadFile;
+export const UploadFile = dori77.integrations.Core.UploadFile;
 
-export const GenerateImage = base44.integrations.Core.GenerateImage;
+export const GenerateImage = dori77.integrations.Core.GenerateImage;
 
 export const ExtractDataFromUploadedFile =
-    base44.integrations.Core.ExtractDataFromUploadedFile;
+    dori77.integrations.Core.ExtractDataFromUploadedFile;

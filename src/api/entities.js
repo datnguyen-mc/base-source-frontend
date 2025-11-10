@@ -1,6 +1,6 @@
-import { base44 } from './base44Client';
+import { dori77 } from './dori77Client';
 
-export const Query = base44.entities.Query;
+export const Query = dori77.entities.Query;
 
 // auth sdk:
-export const User = base44.auth;
+export const User = dori77.auth;

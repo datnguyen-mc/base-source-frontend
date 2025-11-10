@@ -13,7 +13,7 @@ const getAppParamValue = (
     if (isNode) {
         return defaultValue;
     }
-    const storageKey = `base44_${toSnakeCase(paramName)}`;
+    const storageKey = `dori77_${toSnakeCase(paramName)}`;
     const urlParams = new URLSearchParams(window.location.search);
     const searchParam = urlParams.get(paramName);
     if (removeFromUrl) {
@@ -41,10 +41,10 @@ const getAppParamValue = (
 const getAppParams = () => {
     return {
         appId: getAppParamValue('app_id', {
-            defaultValue: import.meta.env.VITE_BASE44_APP_ID,
+            defaultValue: import.meta.env.VITE_DORI77_APP_ID,
         }),
         serverUrl: getAppParamValue('server_url', {
-            defaultValue: import.meta.env.VITE_BASE44_BACKEND_URL,
+            defaultValue: import.meta.env.VITE_DORI77_BACKEND_URL,
         }),
         token: getAppParamValue('access_token', { removeFromUrl: true }),
         fromUrl: getAppParamValue('from_url', {

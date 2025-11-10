@@ -34,10 +34,11 @@ const AuthenticatedApp = () => {
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
+    } else if (authError.type === 'auth_required' || !isAuthenticated) {
       // Redirect to login automatically
       navigateToLogin();
-      return null;
+    } else {
+      return <>Not found</>;
     }
   }
 
