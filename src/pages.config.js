@@ -5,6 +5,10 @@ export const PAGES = {
     Home: Home,
 };
 
+export const PRIVATE_PAGES = [
+
+];
+
 export const pagesConfig = {
     mainPage: 'Home',
     Pages: PAGES,
