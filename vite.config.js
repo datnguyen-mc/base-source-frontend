@@ -13,6 +13,6 @@ export default defineConfig({
     },
     server: {
         port: 5173,
-        allowedHosts: ['${projectName}.aishare.live'],
+        allowedHosts: true,
     },
 });
