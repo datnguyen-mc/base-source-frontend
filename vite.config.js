@@ -12,7 +12,7 @@ export default defineConfig({
         },
     },
     server: {
-        port: 4000,
+        port: 5173,
         allowedHosts: true,
         hmr: {
            overlay: false,
