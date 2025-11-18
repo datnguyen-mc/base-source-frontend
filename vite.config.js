@@ -15,7 +15,12 @@ export default defineConfig({
         port: 5173,
         allowedHosts: true,
         hmr: {
-           overlay: false,
+           overlay: true,
+        },
+        headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0'
         },
     },
 });
