@@ -22,9 +22,5 @@ export default defineConfig({
             'Pragma': 'no-cache',
             'Expires': '0'
         },
-        watch: {
-            usePolling: true,
-            interval: 200,
-        },
     },
 });
