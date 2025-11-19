@@ -5,7 +5,6 @@ import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js'
 import { errorOverlayPlugin } from './vite-plugins/error-overlay-plugin.js'
 
 export default defineConfig({
-  plugins: [react()],
   plugins: [
     visualEditPlugin(),
     react(),
