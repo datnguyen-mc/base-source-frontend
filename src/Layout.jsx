@@ -1,5 +1,5 @@
 /**
- * 🧠 Layout Template
+ * Layout Template
  * This is the default layout component.
  * Should use this layout as the wrapper for all generated pages.
  * 
