@@ -44,6 +44,16 @@ export default defineConfig({
     watch: {
       usePolling: true,
       interval: 100,
+      ignored: [
+        "**/node_modules/**",
+        "**/.git/**",
+        "**/dist/**",
+        "**/build/**",
+        "**/.idea/**",
+        "**/.vscode/**",
+        "**/*.log",
+        "**/.DS_Store",
+      ],
     },
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
