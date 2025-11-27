@@ -11,15 +11,23 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
-const { Pages, Layout, mainPage } = pagesConfig;
+const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
+
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
+
+const adminMainPageKey = adminMainPage ?? Object.keys(Admins)[0];
+const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : <></>;
 
 setupIframeMessaging();
 
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
-  : <>{children}</>;
+  : <></>;
+
+const AdminLayoutWrapper = ({ children, currentPageName }) => AdminLayout ?
+  <AdminLayout currentPageName={currentPageName}>{children}</AdminLayout>
+  : <></>;
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
@@ -49,15 +57,28 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <LayoutWrapper currentPageName={mainPageKey}>
-      <Routes>
-        <Route path="/" element={<MainPage />} />
+    <Routes>
+      {/* User layout */}
+      <Route element={<LayoutWrapper currentPageName={mainPageKey} />}>
+        <Route index element={<MainPage />} />
+
         {Object.entries(Pages).map(([path, Page]) => (
-          <Route key={path} path={`/${path}`} element={<Page />} />
+          <Route key={path} path={path} element={<Page />} />
         ))}
-        <Route path="*" element={<PageNotFound />} />
-      </Routes>
-    </LayoutWrapper>
+      </Route>
+
+      {/* Admin layout */}
+      <Route path="admin" element={<AdminLayoutWrapper currentPageName={adminMainPageKey} />}>
+        <Route index element={<AdminMainPage />} />
+
+        {Object.entries(Admins).map(([path, Page]) => (
+          <Route key={`admin-${path}`} path={path} element={<Page />} />
+        ))}
+      </Route>
+
+      {/* 404 */}
+      <Route path="*" element={<PageNotFound />} />
+    </Routes>
   );
 };
 
