@@ -10,6 +10,7 @@ import { setupIframeMessaging } from './lib/iframe-messaging';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import Login from './pages/admin/Login';
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -66,6 +67,9 @@ const AuthenticatedApp = () => {
           <Route key={path} path={path} element={<Page />} />
         ))}
       </Route>
+
+      {/* LOGIN ROUTE - NO LAYOUT (Standalone) */}
+      <Route path="/admin/login" element={<Login />} />
 
       {/* Admin layout */}
       <Route path="admin" element={<AdminLayoutWrapper currentPageName={adminMainPageKey} />}>
