@@ -1,16 +1,16 @@
-import { dori77 } from './dori77Client';
+import { vibexClient } from './vibexClient';
 
-export const Core = dori77.integrations.Core;
+export const Core = vibexClient.integrations.Core;
 
-export const InvokeLLM = dori77.integrations.Core.InvokeLLM;
+export const InvokeLLM = vibexClient.integrations.Core.InvokeLLM;
 
-export const SendEmail = dori77.integrations.Core.SendEmail;
+export const SendEmail = vibexClient.integrations.Core.SendEmail;
 
-export const SendSMS = dori77.integrations.Core.SendSMS;
+export const SendSMS = vibexClient.integrations.Core.SendSMS;
 
-export const UploadFile = dori77.integrations.Core.UploadFile;
+export const UploadFile = vibexClient.integrations.Core.UploadFile;
 
-export const GenerateImage = dori77.integrations.Core.GenerateImage;
+export const GenerateImage = vibexClient.integrations.Core.GenerateImage;
 
 export const ExtractDataFromUploadedFile =
-    dori77.integrations.Core.ExtractDataFromUploadedFile;
+    vibexClient.integrations.Core.ExtractDataFromUploadedFile;

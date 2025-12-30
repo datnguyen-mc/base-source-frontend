@@ -1,6 +1,6 @@
-import { dori77 } from './dori77Client';
+import { vibexClient } from './vibexClient';
 
-export const Query = dori77.entities.Query;
+export const Query = vibexClient.entities.Query;
 
 // auth sdk:
-export const User = dori77.auth;
+export const User = vibexClient.auth;
