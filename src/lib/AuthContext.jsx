@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   const checkAppState = async () => {
     try {
       setAuthError(null);
-      
+
       try {
         const token = localStorage.getItem("access_token");
         if (!token) {
@@ -27,11 +27,11 @@ export const AuthProvider = ({ children }) => {
           const isPrivate = Object.keys(PRIVATE_PAGES)
             .map((k) => `/${k.toLowerCase()}`)
             .some((p) => currentPath.startsWith(p));
-  
+
           if (isPrivate) {
             navigate("/signin", { replace: true });
           }
-  
+
           setIsAuthenticated(false);
           setIsLoadingAuth(false);
           return;
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
         await checkUserAuth();
       } catch (appError) {
         console.error('App state check failed:', appError);
-        
+
         // Handle app-level errors
         if (appError.status === 403 && appError.data?.extra_data?.reason) {
           const reason = appError.data.extra_data.reason;
@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }) => {
     try {
       // Now check if the user is authenticated
       setIsLoadingAuth(true);
-      const res = await dori77.auth.me();
+      const res = await vibex.auth.me();
       setUser(res?.data || null);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
@@ -102,25 +102,25 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
-    
+
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
-      dori77.auth.logout(window.location.href);
+      vibex.auth.logout(window.location.href);
     } else {
       // Just remove the token without redirect
-      dori77.auth.logout();
+      vibex.auth.logout();
     }
   };
 
   const navigateToLogin = () => {
     // Use the SDK's redirectToLogin method
-    dori77.auth.redirectToLogin(window.location.href);
+    vibex.auth.redirectToLogin(window.location.href);
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated, 
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated,
       isLoadingAuth,
       isLoadingPublicSettings,
       authError,
