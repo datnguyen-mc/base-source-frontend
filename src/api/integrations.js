@@ -1,16 +1,16 @@
-import { vibexClient } from './vibexClient';
+import { vibex } from './vibexClient';
 
-export const Core = vibexClient.integrations.Core;
+export const Core = vibex.integrations.Core;
 
-export const InvokeLLM = vibexClient.integrations.Core.InvokeLLM;
+export const InvokeLLM = vibex.integrations.Core.InvokeLLM;
 
-export const SendEmail = vibexClient.integrations.Core.SendEmail;
+export const SendEmail = vibex.integrations.Core.SendEmail;
 
-export const SendSMS = vibexClient.integrations.Core.SendSMS;
+export const SendSMS = vibex.integrations.Core.SendSMS;
 
-export const UploadFile = vibexClient.integrations.Core.UploadFile;
+export const UploadFile = vibex.integrations.Core.UploadFile;
 
-export const GenerateImage = vibexClient.integrations.Core.GenerateImage;
+export const GenerateImage = vibex.integrations.Core.GenerateImage;
 
 export const ExtractDataFromUploadedFile =
-    vibexClient.integrations.Core.ExtractDataFromUploadedFile;
+    vibex.integrations.Core.ExtractDataFromUploadedFile;

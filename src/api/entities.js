@@ -1,6 +1,6 @@
-import { vibexClient } from './vibexClient';
+import { vibex } from './vibexClient';
 
-export const Query = vibexClient.entities.Query;
+export const Query = vibex.entities.Query;
 
 // auth sdk:
-export const User = vibexClient.auth;
+export const User = vibex.auth;

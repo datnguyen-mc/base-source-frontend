@@ -1,8 +1,7 @@
 
-import { isIframe } from "./utils.js";
+import { isIframe } from "./coreUtils.js";
 
 export function setupIframeMessaging() {
-  console.log("Setting up iframe messaging");
   if (isIframe) {
     window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     window.removeEventListener("error", handleWindowError);

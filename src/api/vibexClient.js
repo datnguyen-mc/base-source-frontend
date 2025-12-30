@@ -4,6 +4,6 @@ import { appParams } from '@/lib/app-params';
 
 const { serverUrl } = appParams;
 
-export const vibexClient = createClient({
+export const vibex = createClient({
   serverUrl,
 });

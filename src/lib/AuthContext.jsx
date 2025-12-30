@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { dori77 } from '@/api/dori77Client';
+import { vibex } from '@/api/vibexClient';
 import { PRIVATE_PAGES } from './../pages.config';
 
 const AuthContext = createContext();
