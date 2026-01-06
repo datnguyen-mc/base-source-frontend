@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { vibex } from '@/api/vibexClient';
-import { PRIVATE_PAGES } from './../pages.config';
 import { AuthContext } from './AuthContext';
 
 export const AuthProvider = ({ children }) => {
@@ -23,7 +22,7 @@ export const AuthProvider = ({ children }) => {
                 const token = localStorage.getItem("access_token");
                 if (!token) {
                     const currentPath = location.pathname.toLowerCase();
-                    const isPrivate = Object.keys(PRIVATE_PAGES)
+                    const isPrivate = Object.keys({})
                         .map((k) => `/${k.toLowerCase()}`)
                         .some((p) => currentPath.startsWith(p));
 
