@@ -43,7 +43,7 @@ export default defineConfig({
     allowedHosts: true,
     watch: {
       usePolling: true,
-      interval: 100,
+      interval: 500,
       ignored: [
         "**/node_modules/**",
         "**/.git/**",
@@ -53,7 +53,13 @@ export default defineConfig({
         "**/.vscode/**",
         "**/*.log",
         "**/.DS_Store",
+        "**/assets/**",
+        "**/vite-plugins/**",
       ],
+      awaitWriteFinish: {
+        stabilityThreshold: 2000,
+        pollInterval: 100
+      }
     },
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
