@@ -55,6 +55,7 @@ export default defineConfig({
         "**/.DS_Store",
         "**/assets/**",
         "**/vite-plugins/**",
+        "**/src/index.css",
       ],
       awaitWriteFinish: {
         stabilityThreshold: 2000,
