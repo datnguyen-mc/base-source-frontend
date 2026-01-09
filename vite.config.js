@@ -58,7 +58,7 @@ export default defineConfig({
         "**/src/index.css",
       ],
       awaitWriteFinish: {
-        stabilityThreshold: 1000,
+        stabilityThreshold: 3000,
         pollInterval: 200
       }
     },
