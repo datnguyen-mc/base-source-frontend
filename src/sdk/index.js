@@ -1,5 +1,5 @@
 // =============================================================
-// DORI77 SDK
+// vibexClient SDK
 // ================== helpers ==================
 function ensureBase(url) {
   return url.endsWith("/") ? url : url + "/";
@@ -122,7 +122,7 @@ function createHttp(cfg) {
 
     // unauthorized → auto redirect
     if (res.status === 401 || res.status === 403) {
-      console.warn(`[Dori77 SDK] Unauthorized (${res.status})`);
+      console.warn(`[vibexClient SDK] Unauthorized (${res.status})`);
 
       try {
         token = undefined;
@@ -134,7 +134,7 @@ function createHttp(cfg) {
       } catch (e) { }
 
       throw {
-        name: "Dori77Error",
+        name: "vibexClientError",
         message: "Unauthorized",
         status: res.status,
         data,
@@ -143,7 +143,7 @@ function createHttp(cfg) {
 
     if (!res.ok) {
       throw {
-        name: "Dori77Error",
+        name: "vibexClientError",
         message: data?.message || data?.title || "Request failed",
         status: data?.status ?? res.status,
         data,

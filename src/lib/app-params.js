@@ -13,14 +13,13 @@ const getAppParamValue = (
     if (isNode) {
         return defaultValue;
     }
-    const storageKey = `dori77_${toSnakeCase(paramName)}`;
+    const storageKey = `vibex_${toSnakeCase(paramName)}`;
     const urlParams = new URLSearchParams(window.location.search);
     const searchParam = urlParams.get(paramName);
     if (removeFromUrl) {
         urlParams.delete(paramName);
-        const newUrl = `${window.location.pathname}${
-            urlParams.toString() ? `?${urlParams.toString()}` : ''
-        }${window.location.hash}`;
+        const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams.toString()}` : ''
+            }${window.location.hash}`;
         window.history.replaceState({}, document.title, newUrl);
     }
     if (searchParam) {
@@ -41,10 +40,10 @@ const getAppParamValue = (
 const getAppParams = () => {
     return {
         appId: getAppParamValue('app_id', {
-            defaultValue: import.meta.env.VITE_DORI77_APP_ID,
+            defaultValue: import.meta.env.VITE_VIBEX_APP_ID,
         }),
         serverUrl: getAppParamValue('server_url', {
-            defaultValue: "https://dev-dori77-platform.leveragehero.net/v1" || import.meta.env.VITE_DORI77_BACKEND_URL,
+            defaultValue: "https://dev.vibe-x.app/v1" || import.meta.env.VITE_VIBEX_BACKEND_URL,
         }),
         token: getAppParamValue('access_token', { removeFromUrl: true }),
         fromUrl: getAppParamValue('from_url', {

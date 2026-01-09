@@ -8,7 +8,8 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { setupIframeMessaging } from './lib/iframe-messaging';
 import PageNotFound from './lib/PageNotFound';
-import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { AuthProvider } from './lib/AuthProvider';
+import { useAuth } from './lib/useAuth';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/admin/Login';
 
