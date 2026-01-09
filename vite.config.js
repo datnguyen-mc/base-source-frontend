@@ -55,11 +55,10 @@ export default defineConfig({
         "**/.DS_Store",
         "**/assets/**",
         "**/vite-plugins/**",
-        "**/src/index.css",
       ],
       awaitWriteFinish: {
         stabilityThreshold: 3000,
-        pollInterval: 200
+        pollInterval: 100
       }
     },
     headers: {
