@@ -1,4 +1,4 @@
-import { dori77 } from './dori77Client';
+import { vibex } from './vibexClient';
 export const auth = {
     login: async (email, password) => {
         try {
@@ -9,7 +9,7 @@ export const auth = {
                 localStorage.setItem('user', JSON.stringify(mockUser));
                 return { token: mockToken, user: mockUser };
             }
-            const res = await dori77.auth.login({ email, password });
+            const res = await vibex.auth.login({ email, password });
             if (res.token) {
                 localStorage.setItem('token', res.token);
                 localStorage.setItem('user', JSON.stringify(res.user));
