@@ -57,7 +57,7 @@ export default defineConfig({
         "**/vite-plugins/**",
       ],
       awaitWriteFinish: {
-        stabilityThreshold: 3000,
+        stabilityThreshold: 500,
         pollInterval: 100
       }
     },
