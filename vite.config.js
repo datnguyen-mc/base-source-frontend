@@ -15,6 +15,7 @@ export default defineConfig({
       name: 'iframe-hmr',
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
+          // Allow iframe embedding
           res.setHeader('X-Frame-Options', 'ALLOWALL');
           res.setHeader('Content-Security-Policy', "frame-ancestors *;");
           next();
@@ -25,25 +26,21 @@ export default defineConfig({
   build: {
     rollupOptions: {
       onwarn(warning, warn) {
+        // Treat import errors as fatal errors
         if (
           warning.code === "UNRESOLVED_IMPORT" ||
           warning.code === "MISSING_EXPORT"
         ) {
           throw new Error(`Build failed: ${warning.message}`);
         }
+        // Use default for other warnings
         warn(warning);
       },
     },
   },
   server: {
     port: 5173,
-    host: true,
-    strictPort: true,
     allowedHosts: true,
-    hmr: {
-      overlay: true,
-      clientPort: 5173,
-    },
     watch: {
       usePolling: true,
       interval: 500,
@@ -60,7 +57,7 @@ export default defineConfig({
         "**/vite-plugins/**",
       ],
       awaitWriteFinish: {
-        stabilityThreshold: 2000,
+        stabilityThreshold: 500,
         pollInterval: 100
       }
     },
