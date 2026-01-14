@@ -24,19 +24,8 @@ export default defineConfig({
     }
   ].filter(Boolean),
   build: {
-    rollupOptions: {
-      onwarn(warning, warn) {
-        // Treat import errors as fatal errors
-        if (
-          warning.code === "UNRESOLVED_IMPORT" ||
-          warning.code === "MISSING_EXPORT"
-        ) {
-          throw new Error(`Build failed: ${warning.message}`);
-        }
-        // Use default for other warnings
-        warn(warning);
-      },
-    },
+    minify: 'esbuild',
+    sourcemap: false,
   },
   server: {
     port: 5173,
