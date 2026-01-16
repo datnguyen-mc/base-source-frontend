@@ -250,7 +250,7 @@ function generateClientScript(config) {
 </script>`;
 }
 
-export default function babelPlugin(options = {}) {
+export function visualEditPlugin(options = {}) {
   const resolvedOptions = {
     ...DEFAULT_OPTIONS,
     ...options,

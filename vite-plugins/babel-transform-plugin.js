@@ -89,7 +89,7 @@ function checkIfElementHasDynamicContent(jsxElement) {
 	return hasDynamicContent;
 }
 
-export function visualEditPlugin() {
+export function babelTransformPlugin() {
 	return {
 		name: 'visual-edit-transform',
 		enforce: 'pre',
