@@ -16,7 +16,7 @@ export default function IframeHeartbeat() {
 
     send();
 
-    timer = window.setInterval(send, 500);
+    timer = window.setInterval(send, 1000);
 
     return () => {
       if (timer) window.clearInterval(timer);
