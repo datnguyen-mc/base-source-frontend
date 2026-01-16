@@ -100,7 +100,6 @@ function App() {
         </Router>
         <Toaster />
         <VisualEditAgent />
-        <IframeHeartbeat />
       </QueryClientProvider>
     </AuthProvider>
   )
