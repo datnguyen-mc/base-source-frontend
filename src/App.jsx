@@ -12,6 +12,7 @@ import { AuthProvider } from './lib/AuthProvider';
 import { useAuth } from './lib/useAuth';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/admin/Login';
+import IframeHeartbeat from './lib/IframeHeartbeat'
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -99,6 +100,7 @@ function App() {
         </Router>
         <Toaster />
         <VisualEditAgent />
+        <IframeHeartbeat />
       </QueryClientProvider>
     </AuthProvider>
   )
