@@ -15,7 +15,7 @@ const DEFAULT_TRANSLATIONS = {
 };
 
 const DEFAULT_OPTIONS = {
-  persistState: true,
+  persistState: false,
   submitTimeout: 10,
   showBadge: false,
   enableKeyboardShortcut: false,
@@ -24,9 +24,9 @@ const DEFAULT_OPTIONS = {
   messageTypeToggle: 'visual-edit-toggle',
   messageTypeLanguage: 'visual-edit-language',
   defaultEnabled: false,
-  colorHover: '#3b82f6',
-  colorSelected: '#10b981',
-  colorSubmit: '#10b981',
+  colorHover: '#b28fff',
+  colorSelected: '#9360fd',
+  colorSubmit: '#9360fd',
   attributeSourceLocation: 'data-source-location',
   attributeDynamicContent: 'data-dynamic-content',
   language: 'en',
@@ -45,7 +45,7 @@ function generateClientScript(config) {
   
   if (CONFIG.persistState) {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved !== null) enabled = saved === 'true';
     } catch(e) {}
   }
@@ -53,13 +53,16 @@ function generateClientScript(config) {
   const HC=CONFIG.colorHover,SC=CONFIG.colorSelected,SB=CONFIG.colorSubmit,LC='#fff';
   const ATTR_LOC = CONFIG.attributeSourceLocation; 
   
+  // Helper to convert hex to rgba
+  function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return\`rgba(\${r},\${g},\${b},\${a})\`}
+  
   let aH=[],aL=[],cL=null,sL=null,sH=[],sLb=[],aF=null,cE=null,iS=false,aSB=null,sT=null,mH=null,init=false;
   
   function cHl(el,sel=false){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY,c=sel?SC:HC;
     const h=document.createElement('div');
     h.className=sel?'ve-hs':'ve-h';
-    h.style.cssText=\`position:absolute;top:\${r.top+sy}px;left:\${r.left+sx}px;width:\${r.width}px;height:\${r.height}px;border:2px solid \${c};background:\${sel?'rgba(16,185,129,.1)':'rgba(59,130,246,.1)'};pointer-events:none;z-index:\${sel?99998:99999};box-sizing:border-box\`;
+    h.style.cssText=\`position:absolute;top:\${r.top+sy}px;left:\${r.left+sx}px;width:\${r.width}px;height:\${r.height}px;border:2px solid \${c};background:\${sel?'transparent':hexToRgba(c,0.1)};pointer-events:none;z-index:\${sel?99998:99999};box-sizing:border-box\`;
     document.body.appendChild(h);
     sel?sH.push(h):aH.push(h);
     return{r,sx,sy};
@@ -116,15 +119,16 @@ function generateClientScript(config) {
     const ip=document.createElement('input');ip.type='text';ip.placeholder=t.placeholder;
     ip.style.cssText='flex:1;border:none;outline:none;font-size:14px;color:#374151;background:transparent';
     const sb=document.createElement('button');
-    sb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>';
-    sb.disabled=true;sb.style.cssText='background:#86efac;border:none;cursor:not-allowed;padding:6px;color:white;display:flex;border-radius:6px';
+    sb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>';
+    sb.disabled=true;sb.style.cssText=\`background:\${SB};opacity:0.5;border:none;cursor:not-allowed;padding:6px;color:white;display:flex;border-radius:6px\`;
     aSB=sb;
-    const upd=()=>{if(iS)return;const h=ip.value.trim().length>0;sb.disabled=!h;sb.style.background=h?SB:'#86efac';sb.style.cursor=h?'pointer':'not-allowed'};
+    const upd=()=>{if(iS)return;const h=ip.value.trim().length>0;sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed'};
     ip.oninput=upd;ip.onkeydown=(e)=>{if(e.key==='Enter'&&ip.value.trim()&&!iS)sub(ip.value.trim());else if(e.key==='Escape')clsF()};
     sb.onclick=()=>{if(ip.value.trim()&&!iS)sub(ip.value.trim())};
     const cb=document.createElement('button');cb.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
-    cb.style.cssText='background:none;border:none;cursor:pointer;padding:4px;color:#9ca3af;display:flex;border-radius:4px';cb.onclick=clsF;
-    f.append(bb,ip,sb,cb);document.body.appendChild(f);aF=f;
+    cb.style.cssText='background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;display:flex;border-radius:4px';cb.onclick=clsF;
+    const dv=document.createElement('div');dv.style.cssText='width:1px;background:#e5e7eb;height:24px;margin-left:5px';
+    f.append(bb,ip,sb,dv,cb);document.body.appendChild(f);aF=f;
     f.addEventListener('mouseenter',clrH);f.addEventListener('click',e=>e.stopPropagation());
     setTimeout(()=>ip.focus(),50);
     const fr=f.getBoundingClientRect();
@@ -148,7 +152,7 @@ function generateClientScript(config) {
   function setEnabled(val) {
     enabled = val;
     if (CONFIG.persistState) {
-      try { localStorage.setItem(STORAGE_KEY, String(val)); } catch(e) {}
+      try { sessionStorage.setItem(STORAGE_KEY, String(val)); } catch(e) {}
     }
     
     const css = document.getElementById('ve-css');
@@ -156,7 +160,7 @@ function generateClientScript(config) {
       if (!css) {
         const s = document.createElement('style');
         s.id = 've-css';
-        s.textContent = 'body,body *{cursor:crosshair}.ve-f,.ve-f *{cursor:auto!important}.ve-f input{cursor:text!important}.ve-f button{cursor:pointer!important}.ve-f button:disabled{cursor:not-allowed!important}.ve-badge{cursor:pointer!important}';
+        s.textContent = 'body,body *{cursor:crosshair}.ve-f,.ve-f *{cursor:pointer}.ve-f input{cursor:text!important}.ve-f button{cursor:pointer!important}.ve-f button:disabled{cursor:not-allowed!important}.ve-badge{cursor:pointer!important}';
         document.head.appendChild(s);
       }
     } else {
@@ -289,7 +293,7 @@ export function visualEditPlugin(options = {}) {
 
   const config = {
     persistState,
-    submitTimeout: submitTimeout * 1000, 
+    submitTimeout: submitTimeout * 1000,
     showBadge,
     enableKeyboardShortcut,
     messageTypeDataRequest,
@@ -308,7 +312,7 @@ export function visualEditPlugin(options = {}) {
 
   return {
     name: 'visual-edit-plugin',
-    
+
     transformIndexHtml(html) {
       const script = generateClientScript(config);
       return html.replace('</body>', `${script}\n</body>`);
