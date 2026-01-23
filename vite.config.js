@@ -1,12 +1,14 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import path from "path";
-import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js'
+import { babelTransformPlugin } from './vite-plugins/babel-transform-plugin.js';
+import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js';
 import { errorOverlayPlugin } from './vite-plugins/error-overlay-plugin.js'
 import { postMessageInject } from "./vite-plugins/postmessage-inject.js";
 
 export default defineConfig({
   plugins: [
+    babelTransformPlugin(),
     visualEditPlugin(),
     react(),
     errorOverlayPlugin(),
