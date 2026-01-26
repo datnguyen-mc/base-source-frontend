@@ -1,58 +1,43 @@
-import { useEffect, useMemo } from "react";
-import { useLocation } from "react-router-dom";
-import { useAuth } from "./useAuth";
-import { pagesConfig } from "@/pages.config";
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useAuth } from './useAuth';
+import { pagesConfig } from '@/pages.config';
 
 export default function NavigationTracker() {
-  const location = useLocation();
-  const { isAuthenticated } = useAuth();
+    const location = useLocation();
+    const { isAuthenticated } = useAuth();
+    const { Pages, mainPage } = pagesConfig;
+    const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 
-  const { Pages, mainPage } = pagesConfig;
+    // Post navigation changes to parent window
+    useEffect(() => {
+        window.parent?.postMessage({
+            type: "app_changed_url",
+            url: window.location.href
+        }, '*');
+    }, [location]);
 
-  const mainPageKey = useMemo(() => {
-    const keys = Object.keys(Pages || {});
-    return mainPage ?? keys[0] ?? null;
-  }, [Pages, mainPage]);
+    // Log user activity when navigating to a page
+    useEffect(() => {
+        // Extract page name from pathname
+        const pathname = location.pathname;
+        let pageName;
 
-  useEffect(() => {
-    if (location.hash) return;
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, [location.pathname, location.search, location.hash]);
+        if (pathname === '/' || pathname === '') {
+            pageName = mainPageKey;
+        } else {
+            // Remove leading slash and get the first segment
+            const pathSegment = pathname.replace(/^\//, '').split('/')[0];
 
-  // Notify parent window when URL changes
-  useEffect(() => {
-    window.parent?.postMessage(
-      {
-        type: "app_changed_url",
-        url: window.location.href,
-      },
-      "*",
-    );
-  }, [location]);
+            // Try case-insensitive lookup in Pages config
+            const pageKeys = Object.keys(Pages);
+            const matchedKey = pageKeys.find(
+                key => key.toLowerCase() === pathSegment.toLowerCase()
+            );
 
-  // Resolve page name from path (case-insensitive) and track activity
-  useEffect(() => {
-    const pathname = location.pathname || "";
-    const isRoot = pathname === "/" || pathname === "";
+            pageName = matchedKey || null;
+        }
+    }, [location, isAuthenticated, Pages, mainPageKey]);
 
-    let pageName = null;
-
-    if (isRoot) {
-      pageName = mainPageKey;
-    } else {
-      const segment = pathname.replace(/^\//, "").split("/")[0] || "";
-
-      const pageKeys = Object.keys(Pages || {});
-      const matchedKey =
-        pageKeys.find((k) => k.toLowerCase() === segment.toLowerCase()) ?? null;
-
-      pageName = matchedKey;
-    }
-
-    // Example safeguard: do nothing if pageName is null
-    void pageName;
-    void isAuthenticated;
-  }, [location.pathname, Pages, mainPageKey, isAuthenticated]);
-
-  return null;
+    return null;
 }
