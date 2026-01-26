@@ -23,6 +23,7 @@ const DEFAULT_OPTIONS = {
   messageTypeDataResponse: 'visual-edit-response',
   messageTypeToggle: 'visual-edit-toggle',
   messageTypeLanguage: 'visual-edit-language',
+  messageTypeConfig: 'visual-edit-config',
   defaultEnabled: false,
   colorHover: '#b28fff',
   colorSelected: '#9360fd',
@@ -30,6 +31,7 @@ const DEFAULT_OPTIONS = {
   attributeSourceLocation: 'data-source-location',
   attributeDynamicContent: 'data-dynamic-content',
   language: 'en',
+  multiSelectSameLocation: false,
 };
 
 function generateClientScript(config) {
@@ -56,7 +58,7 @@ function generateClientScript(config) {
   // Helper to convert hex to rgba
   function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return\`rgba(\${r},\${g},\${b},\${a})\`}
   
-  let aH=[],aL=[],cL=null,sL=null,sH=[],sLb=[],aF=null,cE=null,iS=false,aSB=null,sT=null,mH=null,init=false;
+  let aH=[],aL=[],cL=null,sL=null,sH=[],sLb=[],aF=null,cE=null,iS=false,aSB=null,sT=null,mH=null,init=false,cEIdx=null,hE=null;
   
   function cHl(el,sel=false){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY,c=sel?SC:HC;
@@ -97,7 +99,8 @@ function generateClientScript(config) {
   function clrAll(){clsF();clrH()}
   
   function sub(v){
-    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null};
+    const idx = CONFIG.multiSelectSameLocation ? null : cEIdx;
+    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx};
     setL(true);clnL();
     if(isIF()){
       try{
@@ -136,17 +139,36 @@ function generateClientScript(config) {
     if(fr.bottom>innerHeight)f.style.top=\`\${r.top+sy-fr.height-8}px\`;
   }
   
-  function cSH(loc){sH.forEach(h=>h.remove());sLb.forEach(l=>l.remove());sH=[];sLb=[];document.querySelectorAll(\`[\${ATTR_LOC}="\${loc}"]\`).forEach(e=>{const{r,sx,sy}=cHl(e,true);cLb(e,r,sx,sy,true)})}
-  function hlE(loc){if(cL===loc)return;aH.forEach(h=>h.remove());aL.forEach(l=>l.remove());aH=[];aL=[];cL=loc;if(loc===sL)return;document.querySelectorAll(\`[\${ATTR_LOC}="\${loc}"]\`).forEach(e=>{const{r,sx,sy}=cHl(e,false);cLb(e,r,sx,sy,false)})}
+  function cSH(loc,el){sH.forEach(h=>h.remove());sLb.forEach(l=>l.remove());sH=[];sLb=[];if(CONFIG.multiSelectSameLocation){document.querySelectorAll(\`[\${ATTR_LOC}="\${loc}"]\`).forEach(e=>{const{r,sx,sy}=cHl(e,true);cLb(e,r,sx,sy,true)})}else if(el){const{r,sx,sy}=cHl(el,true);cLb(el,r,sx,sy,true)}}
+  function hlE(loc,el){hE=el;if(CONFIG.multiSelectSameLocation){if(cL===loc)return;aH.forEach(h=>h.remove());aL.forEach(l=>l.remove());aH=[];aL=[];cL=loc;if(loc===sL)return;document.querySelectorAll(\`[\${ATTR_LOC}="\${loc}"]\`).forEach(e=>{const{r,sx,sy}=cHl(e,false);cLb(e,r,sx,sy,false)})}else{aH.forEach(h=>h.remove());aL.forEach(l=>l.remove());aH=[];aL=[];cL=loc;if(el===cE)return;const{r,sx,sy}=cHl(el,false);cLb(el,r,sx,sy,false)}}
   
-  function mO(e){if(!enabled)return;const t=e.target;if(t.closest('.ve-h,.ve-hs,.ve-l,.ve-ls,.ve-f,.ve-badge'))return;const el=t.closest(\`[\${ATTR_LOC}]\`);if(el)hlE(el.getAttribute(ATTR_LOC))}
-  function mOut(e){if(!enabled)return;const rt=e.relatedTarget;if(rt){if(rt.closest?.('.ve-h,.ve-hs,.ve-l,.ve-ls,.ve-f,.ve-badge'))return;const el=rt.closest?.(\`[\${ATTR_LOC}]\`);if(el&&el.getAttribute(ATTR_LOC)===cL)return}clrH()}
-  function clk(e){if(!enabled)return;const t=e.target;if(t.closest('.ve-f,.ve-badge'))return;const el=t.closest(\`[\${ATTR_LOC}]\`);if(el){const loc=el.getAttribute(ATTR_LOC);if(loc===sL)return;e.preventDefault();e.stopPropagation();if(aF){aF.remove();aF=null}sL=loc;cE=el;clrH();cSH(loc);cIF(el)}else if(sL)clsF()}
+  function mO(e){if(!enabled)return;const t=e.target;if(t.closest('.ve-h,.ve-hs,.ve-l,.ve-ls,.ve-f,.ve-badge'))return;const el=t.closest(\`[\${ATTR_LOC}]\`);if(el)hlE(el.getAttribute(ATTR_LOC),el)}
+  function mOut(e){if(!enabled)return;const rt=e.relatedTarget;if(rt){if(rt.closest?.('.ve-h,.ve-hs,.ve-l,.ve-ls,.ve-f,.ve-badge'))return;const el=rt.closest?.(\`[\${ATTR_LOC}]\`);if(CONFIG.multiSelectSameLocation){if(el&&el.getAttribute(ATTR_LOC)===cL)return}else{if(el===hE)return}}clrH()}
+  function clk(e){if(!enabled)return;const t=e.target;if(t.closest('.ve-f,.ve-badge'))return;const el=t.closest(\`[\${ATTR_LOC}]\`);if(el){const loc=el.getAttribute(ATTR_LOC);if(!CONFIG.multiSelectSameLocation&&el===cE)return;if(CONFIG.multiSelectSameLocation&&loc===sL)return;e.preventDefault();e.stopPropagation();if(aF){aF.remove();aF=null}sL=loc;cE=el;const allEls=Array.from(document.querySelectorAll(\`[\${ATTR_LOC}="\${loc}"]\`));cEIdx=allEls.indexOf(el);cEIdx=cEIdx===-1?null:cEIdx;clrH();cSH(loc,el);cIF(el)}else if(sL)clsF()}
   
   function upd(){
     if(!enabled)return;
-    if(cL){const els=document.querySelectorAll(\`[\${ATTR_LOC}="\${cL}"]\`);aH.forEach((h,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();h.style.top=\`\${r.top+scrollY}px\`;h.style.left=\`\${r.left+scrollX}px\`;h.style.width=\`\${r.width}px\`;h.style.height=\`\${r.height}px\`});aL.forEach((l,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();l.style.top=r.top<20?\`\${r.top+scrollY+2}px\`:\`\${r.top+scrollY-20}px\`;l.style.left=\`\${r.left+scrollX}px\`})}
-    if(sL){const els=document.querySelectorAll(\`[\${ATTR_LOC}="\${sL}"]\`);sH.forEach((h,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();h.style.top=\`\${r.top+scrollY}px\`;h.style.left=\`\${r.left+scrollX}px\`;h.style.width=\`\${r.width}px\`;h.style.height=\`\${r.height}px\`});sLb.forEach((l,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();l.style.top=r.top<20?\`\${r.top+scrollY+2}px\`:\`\${r.top+scrollY-20}px\`;l.style.left=\`\${r.left+scrollX}px\`});if(aF&&cE){const r=cE.getBoundingClientRect(),fr=aF.getBoundingClientRect();let t=r.bottom+scrollY+8;if(r.bottom+fr.height+8>innerHeight)t=r.top+scrollY-fr.height-8;aF.style.top=\`\${t}px\`;aF.style.left=\`\${Math.min(r.left+scrollX,innerWidth-fr.width-16)}px\`}}
+    if(cL){
+      if(CONFIG.multiSelectSameLocation){
+        const els=document.querySelectorAll(\`[\${ATTR_LOC}="\${cL}"]\`);
+        aH.forEach((h,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();h.style.top=\`\${r.top+scrollY}px\`;h.style.left=\`\${r.left+scrollX}px\`;h.style.width=\`\${r.width}px\`;h.style.height=\`\${r.height}px\`});
+        aL.forEach((l,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();l.style.top=r.top<20?\`\${r.top+scrollY+2}px\`:\`\${r.top+scrollY-20}px\`;l.style.left=\`\${r.left+scrollX}px\`});
+      }else if(hE){
+        if(aH[0]){const r=hE.getBoundingClientRect();aH[0].style.top=\`\${r.top+scrollY}px\`;aH[0].style.left=\`\${r.left+scrollX}px\`;aH[0].style.width=\`\${r.width}px\`;aH[0].style.height=\`\${r.height}px\`}
+        if(aL[0]){const r=hE.getBoundingClientRect();aL[0].style.top=r.top<20?\`\${r.top+scrollY+2}px\`:\`\${r.top+scrollY-20}px\`;aL[0].style.left=\`\${r.left+scrollX}px\`}
+      }
+    }
+    if(sL){
+      if(CONFIG.multiSelectSameLocation){
+        const els=document.querySelectorAll(\`[\${ATTR_LOC}="\${sL}"]\`);
+        sH.forEach((h,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();h.style.top=\`\${r.top+scrollY}px\`;h.style.left=\`\${r.left+scrollX}px\`;h.style.width=\`\${r.width}px\`;h.style.height=\`\${r.height}px\`});
+        sLb.forEach((l,i)=>{const e=els[i];if(!e)return;const r=e.getBoundingClientRect();l.style.top=r.top<20?\`\${r.top+scrollY+2}px\`:\`\${r.top+scrollY-20}px\`;l.style.left=\`\${r.left+scrollX}px\`});
+      }else if(cE){
+        if(sH[0]){const r=cE.getBoundingClientRect();sH[0].style.top=\`\${r.top+scrollY}px\`;sH[0].style.left=\`\${r.left+scrollX}px\`;sH[0].style.width=\`\${r.width}px\`;sH[0].style.height=\`\${r.height}px\`}
+        if(sLb[0]){const r=cE.getBoundingClientRect();sLb[0].style.top=r.top<20?\`\${r.top+scrollY+2}px\`:\`\${r.top+scrollY-20}px\`;sLb[0].style.left=\`\${r.left+scrollX}px\`}
+      }
+      if(aF&&cE){const r=cE.getBoundingClientRect(),fr=aF.getBoundingClientRect();let t=r.bottom+scrollY+8;if(r.bottom+fr.height+8>innerHeight)t=r.top+scrollY-fr.height-8;aF.style.top=\`\${t}px\`;aF.style.left=\`\${Math.min(r.left+scrollX,innerWidth-fr.width-16)}px\`}
+    }
   }
   
   function setEnabled(val) {
@@ -205,6 +227,11 @@ function generateClientScript(config) {
     }
   }
   
+  function setMultiSelect(val) {
+    CONFIG.multiSelectSameLocation = !!val;
+    clrAll();
+  }
+  
   function onMessage(e) {
     if (e.data && e.data.type === CONFIG.messageTypeToggle) {
       if (typeof e.data.enabled === 'boolean') {
@@ -215,6 +242,10 @@ function generateClientScript(config) {
     } else if (e.data && e.data.type === CONFIG.messageTypeLanguage) {
       if (e.data.language) {
         setLanguage(e.data.language);
+      }
+    } else if (e.data && e.data.type === CONFIG.messageTypeConfig) {
+      if (typeof e.data.multiSelectSameLocation === 'boolean') {
+        setMultiSelect(e.data.multiSelectSameLocation);
       }
     }
   }
@@ -247,7 +278,9 @@ function generateClientScript(config) {
     disable: () => setEnabled(false),
     toggle: () => setEnabled(!enabled),
     setLanguage: (lang) => setLanguage(lang),
+    setMultiSelect: (val) => setMultiSelect(val),
     isEnabled: () => enabled,
+    isMultiSelect: () => CONFIG.multiSelectSameLocation,
     config: CONFIG
   };
 })();
@@ -269,6 +302,7 @@ export function visualEditPlugin(options = {}) {
     messageTypeDataResponse,
     messageTypeToggle,
     messageTypeLanguage,
+    messageTypeConfig,
     defaultEnabled,
     colorHover,
     colorSelected,
@@ -276,6 +310,7 @@ export function visualEditPlugin(options = {}) {
     attributeSourceLocation,
     attributeDynamicContent,
     language,
+    multiSelectSameLocation,
     translations: userTranslations,
   } = resolvedOptions;
 
@@ -300,6 +335,7 @@ export function visualEditPlugin(options = {}) {
     messageTypeDataResponse,
     messageTypeToggle,
     messageTypeLanguage,
+    messageTypeConfig,
     defaultEnabled,
     colorHover,
     colorSelected,
@@ -307,6 +343,7 @@ export function visualEditPlugin(options = {}) {
     attributeSourceLocation,
     attributeDynamicContent,
     language,
+    multiSelectSameLocation,
     translations,
   };
 
