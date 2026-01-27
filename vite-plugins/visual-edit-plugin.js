@@ -53,7 +53,8 @@ function generateClientScript(config) {
   }
   
   const HC=CONFIG.colorHover,SC=CONFIG.colorSelected,SB=CONFIG.colorSubmit,LC='#fff';
-  const ATTR_LOC = CONFIG.attributeSourceLocation; 
+  const ATTR_LOC = CONFIG.attributeSourceLocation;
+  const ATTR_DYN = CONFIG.attributeDynamicContent;
   
   // Helper to convert hex to rgba
   function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return\`rgba(\${r},\${g},\${b},\${a})\`}
@@ -100,7 +101,8 @@ function generateClientScript(config) {
   
   function sub(v){
     const idx = CONFIG.multiSelectSameLocation ? null : cEIdx;
-    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx};
+    const dynContent = cE?.getAttribute(ATTR_DYN) || null;
+    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent};
     setL(true);clnL();
     if(isIF()){
       try{
