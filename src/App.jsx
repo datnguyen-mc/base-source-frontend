@@ -1,17 +1,27 @@
-import './App.css'
-import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
-import VisualEditAgent from '@/lib/VisualEditAgent'
-import NavigationTracker from '@/lib/NavigationTracker'
-import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import { setupIframeMessaging } from './lib/iframe-messaging';
-import PageNotFound from './lib/PageNotFound';
-import { AuthProvider } from './lib/AuthProvider';
-import { useAuth } from './lib/useAuth';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-import Login from './pages/admin/Login';
+import "./App.css";
+import React, { useEffect } from "react";
+import { Toaster } from "@/components/ui/toaster";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClientInstance } from "@/lib/query-client";
+import VisualEditAgent from "@/lib/VisualEditAgent";
+import NavigationTracker from "@/lib/NavigationTracker";
+import { pagesConfig } from "./pages.config";
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Route,
+  Routes,
+  ScrollRestoration,
+  useNavigationType,
+  useLocation,
+} from "react-router-dom";
+import { setupIframeMessaging } from "./lib/iframe-messaging";
+import PageNotFound from "./lib/PageNotFound";
+import { AuthProvider } from "./lib/AuthProvider";
+import { useAuth } from "./lib/useAuth";
+import UserNotRegisteredError from "@/components/UserNotRegisteredError";
+import Login from "./pages/admin/Login";
+import IframeHeartbeat from "./lib/IframeHeartbeat";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -23,18 +33,35 @@ const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : <></>;
 
 setupIframeMessaging();
 
-const LayoutWrapper = ({ children, currentPageName }) => Layout ?
-  <Layout currentPageName={currentPageName}>{children}</Layout>
-  : <></>;
+const LayoutWrapper = ({ children, currentPageName }) =>
+  Layout ? <Layout currentPageName={currentPageName}>{children}</Layout> : <></>;
 
-const AdminLayoutWrapper = ({ children, currentPageName }) => AdminLayout ?
-  <AdminLayout currentPageName={currentPageName}>{children}</AdminLayout>
-  : <></>;
+const AdminLayoutWrapper = ({ children, currentPageName }) =>
+  AdminLayout ? <AdminLayout currentPageName={currentPageName}>{children}</AdminLayout> : <></>;
+
+/**
+ * PUSH/REPLACE -> scroll top
+ * POP (back/forward) -> let ScrollRestoration handle restoring
+ */
+function ScrollBehavior() {
+  const navType = useNavigationType(); 
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.hash) return;
+
+    if (navType === "PUSH" || navType === "REPLACE") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, [navType, location.pathname, location.search, location.hash]);
+
+  return null;
+}
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } =
+    useAuth();
 
-  // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
@@ -43,27 +70,24 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Handle authentication errors
   if (authError) {
-    if (authError.type === 'user_not_registered') {
+    if (authError.type === "user_not_registered") {
       return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required' || !isAuthenticated) {
-      // Redirect to login automatically
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+    } else if (authError.type === "auth_required" || !isAuthenticated) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
       navigateToLogin();
+      return null;
     } else {
-      return <>Error </>
+      return <>Error</>;
     }
   }
 
-  // Render the main app
   return (
     <Routes>
       {/* User layout */}
       <Route element={<LayoutWrapper currentPageName={mainPageKey} />}>
         <Route index element={<MainPage />} />
-
         {Object.entries(Pages).map(([path, Page]) => (
           <Route key={path} path={path} element={<Page />} />
         ))}
@@ -75,7 +99,6 @@ const AuthenticatedApp = () => {
       {/* Admin layout */}
       <Route path="admin" element={<AdminLayoutWrapper currentPageName={adminMainPageKey} />}>
         <Route index element={<AdminMainPage />} />
-
         {Object.entries(Admins).map(([path, Page]) => (
           <Route key={`admin-${path}`} path={path} element={<Page />} />
         ))}
@@ -87,21 +110,37 @@ const AuthenticatedApp = () => {
   );
 };
 
+function RootShell() {
+  return (
+    <>
+      {/* Restore on POP */}
+      <ScrollRestoration getKey={(location) => location.pathname + location.search} />
+      {/* Force top on PUSH/REPLACE */}
+      <ScrollBehavior />
+
+      <NavigationTracker />
+      <AuthenticatedApp />
+    </>
+  );
+}
+
+const router = createBrowserRouter([
+  {
+    path: "*",
+    element: <RootShell />,
+  },
+]);
 
 function App() {
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <NavigationTracker />
-          <AuthenticatedApp />
-        </Router>
+        <RouterProvider router={router} />
         <Toaster />
         <VisualEditAgent />
       </QueryClientProvider>
     </AuthProvider>
-  )
+  );
 }
 
-export default App
+export default App;
