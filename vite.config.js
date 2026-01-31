@@ -32,26 +32,26 @@ export default defineConfig({
   server: {
     port: 5173,
     allowedHosts: true,
-    // watch: {
-    //   usePolling: true,
-    //   interval: 500,
-    //   ignored: [
-    //     "**/node_modules/**",
-    //     "**/.git/**",
-    //     "**/dist/**",
-    //     "**/build/**",
-    //     "**/.idea/**",
-    //     "**/.vscode/**",
-    //     "**/*.log",
-    //     "**/.DS_Store",
-    //     "**/assets/**",
-    //     "**/vite-plugins/**",
-    //   ],
-    //   awaitWriteFinish: {
-    //     stabilityThreshold: 500,
-    //     pollInterval: 100
-    //   }
-    // },
+    watch: {
+      usePolling: true,
+      interval: 500,
+      ignored: [
+        "**/node_modules/**",
+        "**/.git/**",
+        "**/dist/**",
+        "**/build/**",
+        "**/.idea/**",
+        "**/.vscode/**",
+        "**/*.log",
+        "**/.DS_Store",
+        "**/assets/**",
+        "**/vite-plugins/**",
+      ],
+      awaitWriteFinish: {
+        stabilityThreshold: 500,
+        pollInterval: 100
+      }
+    },
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
       Pragma: "no-cache",
