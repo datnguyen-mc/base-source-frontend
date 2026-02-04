@@ -20,10 +20,7 @@ if (import.meta.hot) {
 
 
 // Logic gửi message an toàn và mượt mà
-// Chỉ chạy khi localStorage có cờ ping === 'true'
-const isPingEnabled = localStorage.getItem('ping') === 'true';
 
-if (isPingEnabled) {
   if (import.meta.hot) {
     let debounceTimer;
 
@@ -73,4 +70,4 @@ if (isPingEnabled) {
       window.parent.postMessage({ type: 'sourcex_pong' }, '*');
     }
   });
-}
+
