@@ -22,6 +22,7 @@ import { useAuth } from "./lib/useAuth";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import Login from "./pages/admin/Login";
 import IframeHeartbeat from "./lib/IframeHeartbeat";
+import ErrorBoundary from "@/components/ui/error-boundary";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -133,6 +134,7 @@ const router = createBrowserRouter([
 
 function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <RouterProvider router={router} />
@@ -140,6 +142,7 @@ function App() {
         <VisualEditAgent />
       </QueryClientProvider>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
