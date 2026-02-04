@@ -23,6 +23,7 @@ import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import Login from "./pages/admin/Login";
 import IframeHeartbeat from "./lib/IframeHeartbeat";
 import ErrorBoundary from "@/components/ui/error-boundary";
+import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -129,6 +130,7 @@ const router = createBrowserRouter([
   {
     path: "*",
     element: <RootShell />,
+    errorElement: <RouterErrorBoundary />,
   },
 ]);
 
