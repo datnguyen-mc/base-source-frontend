@@ -19,11 +19,13 @@ const DEFAULT_OPTIONS = {
   submitTimeout: 10,
   showBadge: false,
   enableKeyboardShortcut: false,
+  defaultInputDisabled: false,
   messageTypeDataRequest: 'visual-edit-request',
   messageTypeDataResponse: 'visual-edit-response',
   messageTypeToggle: 'visual-edit-toggle',
   messageTypeLanguage: 'visual-edit-language',
   messageTypeConfig: 'visual-edit-config',
+  messageTypeInputControl: 'visual-edit-input-control',
   defaultEnabled: false,
   colorHover: '#b28fff',
   colorSelected: '#9360fd',
@@ -59,7 +61,7 @@ function generateClientScript(config) {
   // Helper to convert hex to rgba
   function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return\`rgba(\${r},\${g},\${b},\${a})\`}
   
-  let aH=[],aL=[],cL=null,sL=null,sH=[],sLb=[],aF=null,cE=null,iS=false,aSB=null,sT=null,mH=null,init=false,cEIdx=null,hE=null;
+  let aH=[],aL=[],cL=null,sL=null,sH=[],sLb=[],aF=null,cE=null,iS=false,aSB=null,sT=null,mH=null,init=false,cEIdx=null,hE=null,inputDisabled=CONFIG.defaultInputDisabled;
   
   function cHl(el,sel=false){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY,c=sel?SC:HC;
@@ -127,9 +129,9 @@ function generateClientScript(config) {
     sb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>';
     sb.disabled=true;sb.style.cssText=\`background:\${SB};opacity:0.5;border:none;cursor:not-allowed;padding:6px;color:white;display:flex;border-radius:6px\`;
     aSB=sb;
-    const upd=()=>{if(iS)return;const h=ip.value.trim().length>0;sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed'};
-    ip.oninput=upd;ip.onkeydown=(e)=>{if(e.key==='Enter'&&ip.value.trim()&&!iS)sub(ip.value.trim());else if(e.key==='Escape')clsF()};
-    sb.onclick=()=>{if(ip.value.trim()&&!iS)sub(ip.value.trim())};
+    const upd=()=>{if(iS||inputDisabled)return;const h=ip.value.trim().length>0;sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed'};
+    ip.oninput=upd;ip.onkeydown=(e)=>{if(e.key==='Enter'&&ip.value.trim()&&!iS&&!inputDisabled)sub(ip.value.trim());else if(e.key==='Escape')clsF()};
+    sb.onclick=()=>{if(ip.value.trim()&&!iS&&!inputDisabled)sub(ip.value.trim())};
     const cb=document.createElement('button');cb.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
     cb.style.cssText='background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;display:flex;border-radius:4px';cb.onclick=clsF;
     const dv=document.createElement('div');dv.style.cssText='width:1px;background:#e5e7eb;height:24px;margin-left:5px';
@@ -139,6 +141,10 @@ function generateClientScript(config) {
     const fr=f.getBoundingClientRect();
     if(fr.right>innerWidth)f.style.left=\`\${innerWidth-fr.width-16}px\`;
     if(fr.bottom>innerHeight)f.style.top=\`\${r.top+sy-fr.height-8}px\`;
+    if(inputDisabled){
+      ip.disabled=true;ip.style.opacity='0.5';ip.style.cursor='not-allowed';
+      sb.disabled=true;sb.style.opacity='0.5';sb.style.cursor='not-allowed';
+    }
   }
   
   function cSH(loc,el){sH.forEach(h=>h.remove());sLb.forEach(l=>l.remove());sH=[];sLb=[];if(CONFIG.multiSelectSameLocation){document.querySelectorAll(\`[\${ATTR_LOC}="\${loc}"]\`).forEach(e=>{const{r,sx,sy}=cHl(e,true);cLb(e,r,sx,sy,true)})}else if(el){const{r,sx,sy}=cHl(el,true);cLb(el,r,sx,sy,true)}}
@@ -234,6 +240,31 @@ function generateClientScript(config) {
     clrAll();
   }
   
+  function setInputDisabled(disabled) {
+    inputDisabled = !!disabled;
+    if (!aF) {
+      return;
+    }
+    const ip = aF.querySelector('input');
+    if (ip) {
+      ip.disabled = !!disabled;
+      ip.style.opacity = disabled ? '0.5' : '1';
+      ip.style.cursor = disabled ? 'not-allowed' : 'text';
+    }
+    if (aSB) {
+      if (disabled) {
+        aSB.disabled = true;
+        aSB.style.opacity = '0.5';
+        aSB.style.cursor = 'not-allowed';
+      } else {
+        const hasValue = ip && ip.value.trim().length > 0;
+        aSB.disabled = !hasValue;
+        aSB.style.opacity = hasValue ? '1' : '0.5';
+        aSB.style.cursor = hasValue ? 'pointer' : 'not-allowed';
+      }
+    }
+  }
+  
   function onMessage(e) {
     if (e.data && e.data.type === CONFIG.messageTypeToggle) {
       if (typeof e.data.enabled === 'boolean') {
@@ -248,6 +279,10 @@ function generateClientScript(config) {
     } else if (e.data && e.data.type === CONFIG.messageTypeConfig) {
       if (typeof e.data.multiSelectSameLocation === 'boolean') {
         setMultiSelect(e.data.multiSelectSameLocation);
+      }
+    } else if (e.data && e.data.type === CONFIG.messageTypeInputControl) {
+      if (typeof e.data.disabled === 'boolean') {
+        setInputDisabled(e.data.disabled);
       }
     }
   }
@@ -281,8 +316,10 @@ function generateClientScript(config) {
     toggle: () => setEnabled(!enabled),
     setLanguage: (lang) => setLanguage(lang),
     setMultiSelect: (val) => setMultiSelect(val),
+    setInputDisabled: (disabled) => setInputDisabled(disabled),
     isEnabled: () => enabled,
     isMultiSelect: () => CONFIG.multiSelectSameLocation,
+    isInputDisabled: () => inputDisabled,
     config: CONFIG
   };
 })();
@@ -300,11 +337,13 @@ export function visualEditPlugin(options = {}) {
     submitTimeout,
     showBadge,
     enableKeyboardShortcut,
+    defaultInputDisabled,
     messageTypeDataRequest,
     messageTypeDataResponse,
     messageTypeToggle,
     messageTypeLanguage,
     messageTypeConfig,
+    messageTypeInputControl,
     defaultEnabled,
     colorHover,
     colorSelected,
@@ -333,11 +372,13 @@ export function visualEditPlugin(options = {}) {
     submitTimeout: submitTimeout * 1000,
     showBadge,
     enableKeyboardShortcut,
+    defaultInputDisabled,
     messageTypeDataRequest,
     messageTypeDataResponse,
     messageTypeToggle,
     messageTypeLanguage,
     messageTypeConfig,
+    messageTypeInputControl,
     defaultEnabled,
     colorHover,
     colorSelected,
