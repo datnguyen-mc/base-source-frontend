@@ -2,6 +2,24 @@ import { parse } from '@babel/parser';
 import { default as traverse } from '@babel/traverse';
 import { default as generate } from '@babel/generator';
 import * as t from '@babel/types';
+import crypto from 'crypto';
+
+// Simple LRU cache to avoid re-parsing unchanged files
+const transformCache = new Map();
+const CACHE_MAX_SIZE = 150;
+
+function getCacheKey(code, id) {
+	return crypto.createHash('md5').update(code).digest('hex') + ':' + id;
+}
+
+function setCache(key, value) {
+	if (transformCache.size >= CACHE_MAX_SIZE) {
+		// Evict oldest entry
+		const firstKey = transformCache.keys().next().value;
+		transformCache.delete(firstKey);
+	}
+	transformCache.set(key, value);
+}
 
 
 // Helper function to check if JSX element contains dynamic content
@@ -109,6 +127,18 @@ export function babelTransformPlugin() {
 			// Process JS/JSX/TS/TSX files
 			if (!id.match(/\.(jsx?|tsx?)$/)) {
 				return null;
+			}
+
+			// Skip files without JSX syntax (quick check before expensive parsing)
+			if (!code.includes('<') || (!code.includes('/>') && !code.includes('</'))) {
+				return null;
+			}
+
+			// Check cache - return cached result if file content hasn't changed
+			const cacheKey = getCacheKey(code, id);
+			const cached = transformCache.get(cacheKey);
+			if (cached) {
+				return cached;
 			}
 
 			// Extract filename from path, preserving pages/ or components/ structure
@@ -227,10 +257,15 @@ export function babelTransformPlugin() {
 					retainLines: true
 				});
 
-				return {
+				const output = {
 					code: result.code,
 					map: null
 				};
+
+				// Cache the result
+				setCache(cacheKey, output);
+
+				return output;
 
 			} catch (error) {
 				console.error('Failed to add source location to JSX:', error);
