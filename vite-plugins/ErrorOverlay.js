@@ -5,10 +5,12 @@ export class ErrorOverlay extends HTMLElement {
 	// Multi-language translations
 	static translations = {
 		en: {
-			helpText: 'Please check the code again and fix the syntax errors.'
+			title: 'Some errors',
+			text: 'We’re retrying the failed update. Please wait a moment.'
 		},
 		ko: {
-			helpText: '코드를 다시 확인하고 구문 오류를 수정하세요.'
+			title: '일부 오류가 발생하였습니다.',
+			text: '실패한 업데이트를 다시 시도하고 있습니다. 잠시만 기다려 주세요.'
 		}
 	};
 
@@ -39,28 +41,41 @@ export class ErrorOverlay extends HTMLElement {
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 			">
 				<div style="max-width: 600px; width: 100%; text-align: center;">
-					<!-- Error Icon -->
-					<div style="
-						width: 64px;
-						height: 64px;
-						margin: 0 auto 24px;
-						background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-						border-radius: 16px;
-						display: flex;
-						align-items: center;
-						justify-content: center;
-						box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.4);
-					">
-						<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-							<line x1="12" y1="9" x2="12" y2="13"></line>
-							<line x1="12" y1="17" x2="12.01" y2="17"></line>
-						</svg>
+					<!-- Error Icon with Glow -->
+					<div style="position: relative; width: 64px; height: 64px; margin: 0 auto 14px;">
+						<!-- Glow Effect -->
+						<div style="
+							position: absolute;
+							inset: -8px;
+							background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+							border-radius: 20px;
+							opacity: 0.3;
+							filter: blur(12px);
+							animation: ve-pulse 2s ease-in-out infinite;
+						"></div>
+						<!-- Icon Box -->
+						<div style="
+							position: relative;
+							width: 64px;
+							height: 64px;
+							background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+							border-radius: 16px;
+							display: flex;
+							align-items: center;
+							justify-content: center;
+							box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.4);
+						">
+							<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: ve-spin 1s linear infinite;">
+								<path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+							</svg>
+						</div>
 					</div>
-					
+					<p style="margin-top: 16px; font-size: 16px; color: #111827; font-weight: 600;">
+						${t.title}
+					</p>
 					<!-- Help Text -->
-					<p style="margin-top: 24px; font-size: 13px; color: #94a3b8;">
-						${t.helpText}
+					<p style="margin-top: 4px; font-size: 14px; color: #4B5563;">
+						${t.text}
 					</p>
 				</div>
 			</div>
@@ -98,6 +113,14 @@ export class ErrorOverlay extends HTMLElement {
 
 		// Call editor frame with the error (via post message)
 		ErrorOverlay.sendErrorToParent(error, title, details, componentName);
+
+		// Add spin animation style to head if not exists
+		if (!document.getElementById('ve-spin-style')) {
+			const style = document.createElement('style');
+			style.id = 've-spin-style';
+			style.textContent = '@keyframes ve-spin { to { transform: rotate(360deg); } } @keyframes ve-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.5; } }';
+			document.head.appendChild(style);
+		}
 
 		// Remove any existing overlay
 		const existingOverlay = document.getElementById('vite-error-overlay');
