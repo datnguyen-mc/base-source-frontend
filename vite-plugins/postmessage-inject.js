@@ -113,17 +113,17 @@ export function postMessageInject() {
                         }
 
                         // Catch successful module UPDATE (trigger when SAVE file)
-                        if (data.type === "update") {
-                          console.log("[Inject] HMR Update detected", data);
+                        // if (data.type === "update") {
+                        //   console.log("[Inject] HMR Update detected", data);
 
-                          window.parent?.postMessage(
-                            {
-                              type: "sandbox:afterUpdate",
-                              updates: data.updates || [],
-                            },
-                            "*"
-                          );
-                        }
+                        //   window.parent?.postMessage(
+                        //     {
+                        //       type: "sandbox:afterUpdate",
+                        //       updates: data.updates || [],
+                        //     },
+                        //     "*"
+                        //   );
+                        // }
 
                       } catch (err) {
                         // ignore parsing failures
