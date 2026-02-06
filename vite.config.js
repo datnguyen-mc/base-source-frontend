@@ -1,12 +1,14 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import path from "path";
-import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js'
+import { babelTransformPlugin } from './vite-plugins/babel-transform-plugin.js';
+import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js';
 import { errorOverlayPlugin } from './vite-plugins/error-overlay-plugin.js'
 import { postMessageInject } from "./vite-plugins/postmessage-inject.js";
 
 export default defineConfig({
   plugins: [
+    babelTransformPlugin(),
     visualEditPlugin(),
     react(),
     errorOverlayPlugin(),
@@ -21,22 +23,11 @@ export default defineConfig({
           next();
         });
       }
-    }
+    },
   ].filter(Boolean),
   build: {
-    rollupOptions: {
-      onwarn(warning, warn) {
-        // Treat import errors as fatal errors
-        if (
-          warning.code === "UNRESOLVED_IMPORT" ||
-          warning.code === "MISSING_EXPORT"
-        ) {
-          throw new Error(`Build failed: ${warning.message}`);
-        }
-        // Use default for other warnings
-        warn(warning);
-      },
-    },
+    minify: 'esbuild',
+    sourcemap: false,
   },
   server: {
     port: 5173,
