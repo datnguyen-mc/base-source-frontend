@@ -24,18 +24,6 @@ export default defineConfig({
         });
       }
     },
-    {
-      name: 'watch-ai-changes',
-      configureServer(server) {
-        server.watcher.on('all', (event, path) => {
-          server.ws.send({
-              type: 'custom',
-              event: 'vite-fs-syncing',
-              data: { message: 'AI is syncing files...' }
-            });
-        });
-      }
-    },
   ].filter(Boolean),
   build: {
     minify: 'esbuild',
