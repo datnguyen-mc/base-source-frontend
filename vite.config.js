@@ -24,26 +24,15 @@ export default defineConfig({
     }
   ].filter(Boolean),
   build: {
-    rollupOptions: {
-      onwarn(warning, warn) {
-        // Treat import errors as fatal errors
-        if (
-          warning.code === "UNRESOLVED_IMPORT" ||
-          warning.code === "MISSING_EXPORT"
-        ) {
-          throw new Error(`Build failed: ${warning.message}`);
-        }
-        // Use default for other warnings
-        warn(warning);
-      },
-    },
+    minify: 'esbuild',
+    sourcemap: false,
   },
   server: {
     port: 5173,
     allowedHosts: true,
     watch: {
       usePolling: true,
-      interval: 100,
+      interval: 500,
       ignored: [
         "**/node_modules/**",
         "**/.git/**",
@@ -53,7 +42,13 @@ export default defineConfig({
         "**/.vscode/**",
         "**/*.log",
         "**/.DS_Store",
+        "**/assets/**",
+        "**/vite-plugins/**",
       ],
+      awaitWriteFinish: {
+        stabilityThreshold: 500,
+        pollInterval: 100
+      }
     },
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
@@ -65,6 +60,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    dedupe: ['react', 'react-dom']
   },
   optimizeDeps: {
     include: ["react", "react-dom"],
