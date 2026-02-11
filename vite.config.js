@@ -24,18 +24,6 @@ export default defineConfig({
         });
       }
     },
-    {
-      name: 'watch-ai-changes',
-      configureServer(server) {
-        server.watcher.on('all', (event, path) => {
-          server.ws.send({
-              type: 'custom',
-              event: 'vite-fs-syncing',
-              data: { message: 'AI is syncing files...' }
-            });
-        });
-      }
-    },
   ].filter(Boolean),
   build: {
     minify: 'esbuild',
@@ -46,7 +34,8 @@ export default defineConfig({
     allowedHosts: true,
     watch: {
       usePolling: true,
-      interval: 500,
+      interval: 1000,
+      binaryInterval: 3000,
       ignored: [
         "**/node_modules/**",
         "**/.git/**",
@@ -58,10 +47,14 @@ export default defineConfig({
         "**/.DS_Store",
         "**/assets/**",
         "**/vite-plugins/**",
+        "**/public/**",
+        "**/*.md",
+        "**/coverage/**",
+        "**/.husky/**",
       ],
       awaitWriteFinish: {
-        stabilityThreshold: 500,
-        pollInterval: 100
+        stabilityThreshold: 800,
+        pollInterval: 200
       }
     },
     headers: {
@@ -77,7 +70,28 @@ export default defineConfig({
     dedupe: ['react', 'react-dom']
   },
   optimizeDeps: {
-    include: ["react", "react-dom"],
+    include: [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "zustand",
+      "@tanstack/react-query",
+      "framer-motion",
+      "recharts",
+      "lucide-react",
+      "clsx",
+      "tailwind-merge",
+      "class-variance-authority",
+      "sonner",
+      "date-fns",
+      "react-hook-form",
+      "zod",
+      "@hookform/resolvers",
+      "react-hot-toast",
+      "lodash",
+      "cmdk",
+      "react-day-picker",
+    ],
     esbuildOptions: {
       loader: {
         ".js": "jsx",
