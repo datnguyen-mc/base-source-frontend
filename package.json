@@ -9,7 +9,9 @@
         "build": "vite build",
         "lint": "eslint .",
         "typecheck": "tsc -p ./jsconfig.json",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "build:watch": "chokidar \"src/**/*\" \"public/**/*\" \"index.html\" \"vite.config.*\" \"package.json\" -c \"npm run build\" --initial --debounce 1500",
+        "dev:with-build": "sh -c \"npm run dev -- --host 0.0.0.0 --port 5173 & npm run build:watch\""
     },
     "dependencies": {
         "@hello-pangea/dnd": "^17.0.0",
