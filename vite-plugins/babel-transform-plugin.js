@@ -107,6 +107,38 @@ function checkIfElementHasDynamicContent(jsxElement) {
 	return hasDynamicContent;
 }
 
+// Set of known HTML and SVG intrinsic element names.
+// Lowercase JSX tags NOT in this set are assumed to belong to a custom reconciler
+// (e.g. react-three-fiber: mesh, group, boxGeometry, fog, etc.) and must be
+// skipped because they do not support HTML data-* attributes.
+const HTML_AND_SVG_ELEMENTS = new Set([
+	// HTML elements
+	'a', 'abbr', 'address', 'area', 'article', 'aside', 'audio', 'b', 'base', 'bdi', 'bdo',
+	'blockquote', 'body', 'br', 'button', 'canvas', 'caption', 'cite', 'code', 'col',
+	'colgroup', 'data', 'datalist', 'dd', 'del', 'details', 'dfn', 'dialog', 'div', 'dl',
+	'dt', 'em', 'embed', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2',
+	'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hgroup', 'hr', 'html', 'i', 'iframe', 'img',
+	'input', 'ins', 'kbd', 'label', 'legend', 'li', 'link', 'main', 'map', 'mark', 'menu',
+	'meta', 'meter', 'nav', 'noscript', 'object', 'ol', 'optgroup', 'option', 'output',
+	'p', 'param', 'picture', 'pre', 'progress', 'q', 'rp', 'rt', 'ruby', 's', 'samp',
+	'script', 'search', 'section', 'select', 'slot', 'small', 'source', 'span', 'strong',
+	'style', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'template', 'textarea',
+	'tfoot', 'th', 'thead', 'time', 'title', 'tr', 'track', 'u', 'ul', 'var', 'video', 'wbr',
+	// SVG elements
+	'svg', 'g', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'text',
+	'tspan', 'textPath', 'defs', 'use', 'symbol', 'clipPath', 'mask', 'pattern', 'image',
+	'foreignObject', 'marker', 'linearGradient', 'radialGradient', 'stop', 'filter',
+	'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feComposite',
+	'feConvolveMatrix', 'feDiffuseLighting', 'feDisplacementMap', 'feFlood',
+	'feGaussianBlur', 'feImage', 'feMerge', 'feMergeNode', 'feMorphology', 'feOffset',
+	'feSpecularLighting', 'feTile', 'feTurbulence', 'animate', 'animateMotion',
+	'animateTransform', 'set', 'desc', 'metadata',
+]);
+
+function isHtmlOrSvgElement(tagName) {
+	return HTML_AND_SVG_ELEMENTS.has(tagName);
+}
+
 export function babelTransformPlugin() {
 	return {
 		name: 'visual-edit-transform',
@@ -216,6 +248,15 @@ export function babelTransformPlugin() {
 
 						// Skip fragments
 						if (t.isJSXFragment(jsxElement)) return;
+
+						// Skip non-DOM elements (e.g. react-three-fiber: mesh, group, boxGeometry, fog ...)
+						// These are handled by a custom reconciler and do not support data-* attributes
+						if (t.isJSXIdentifier(openingElement.name)) {
+							const tagName = openingElement.name.name;
+							if (tagName[0] === tagName[0].toLowerCase() && !isHtmlOrSvgElement(tagName)) {
+								return;
+							}
+						}
 
 						// Skip if already has source location attribute
 						const hasSourceLocation = openingElement.attributes.some(attr =>
