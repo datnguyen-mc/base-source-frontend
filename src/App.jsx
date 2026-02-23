@@ -24,11 +24,13 @@ import Login from "./pages/admin/Login";
 import IframeHeartbeat from "./lib/IframeHeartbeat";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import RouterErrorBoundary from "@/components/ui/router-error-boundary";
+import DefaultHome from "./pages/Home";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
-const mainPageKey = mainPage ?? Object.keys(Pages)[0];
-const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
+// If PAGES is empty, fallback to the Home component imported directly
+const mainPageKey = mainPage ?? Object.keys(Pages)[0] ?? 'Home';
+const MainPage = Pages[mainPageKey] ?? DefaultHome;
 
 const adminMainPageKey = adminMainPage ?? Object.keys(Admins)[0];
 const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : <></>;
@@ -46,7 +48,7 @@ const AdminLayoutWrapper = ({ children, currentPageName }) =>
  * POP (back/forward) -> let ScrollRestoration handle restoring
  */
 function ScrollBehavior() {
-  const navType = useNavigationType(); 
+  const navType = useNavigationType();
   const location = useLocation();
 
   useEffect(() => {
@@ -137,13 +139,13 @@ const router = createBrowserRouter([
 function App() {
   return (
     <ErrorBoundary>
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <RouterProvider router={router} />
-        <Toaster />
-        <VisualEditAgent />
-      </QueryClientProvider>
-    </AuthProvider>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <RouterProvider router={router} />
+          <Toaster />
+          <VisualEditAgent />
+        </QueryClientProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
