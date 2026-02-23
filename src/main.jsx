@@ -22,6 +22,6 @@ window.addEventListener('message', (event) => {
   if (event.data?.type === 'set-lang') {
     try {
       sessionStorage.setItem('lang', event.data.language || 'ko');
-    } catch (e) {}
+    } catch (e) { }
   }
 });
