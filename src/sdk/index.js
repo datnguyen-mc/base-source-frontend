@@ -95,7 +95,6 @@ function createHttp(cfg) {
 
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
-
     const res = await fetchImpl(url, {
       ...init,
       headers: {
@@ -169,7 +168,8 @@ function createDynamicModule(basePath, http) {
         return async (...args) => {
           let path = basePath;
           let last = args[args.length - 1];
-
+          if (last?.filter) last.filter = JSON.stringify(last.filter);
+          if (last?.sort) last.sort = JSON.stringify(last.sort);
           // pure GET methods
           const GET_METHODS = ["list", "filter", "search", "count"];
 
@@ -237,30 +237,25 @@ function createEntities(http) {
     {
       get(_t, entityName) {
         const entity = String(entityName);
-
+        console.log("entity", entity);
         return new Proxy(
           {},
           {
             get(_t2, rawMethod) {
               const method = String(rawMethod);
-
               return async (...args) => {
                 switch (method) {
                   case "list":
                     return http.request(`${entity}`, {
                       method: "GET",
-                      query: clean(args[0]),
-                    });
-
-                  case "filter":
-                    return http.request(`${entity}`, {
-                      method: "GET",
                       query: clean({
-                        q: JSON.stringify(args[0] ?? {}),
-                        sort: args[0]?.sort,
+                        query: clean({
+                        filter: 1,
+                        sort: 1,
                         limit: args[0]?.limit,
                         skip: args[0]?.skip,
                         fields: arrToCsv(args[0]?.fields),
+                      }),
                       }),
                     });
 
