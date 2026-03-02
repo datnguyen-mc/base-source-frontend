@@ -439,16 +439,78 @@ function createAuth(http, cfg) {
 }
 
 // =============================================================
+// Functions Module — Edge Function Invocation
+// =============================================================
+function createFunctions(http) {
+  /**
+   * Invoke an edge function by name.
+   * @param {string} functionName - The function slug (e.g. "weather", "stripe-webhook")
+   * @param {object} [options] - Request options
+   * @param {string} [options.method="POST"] - HTTP method (GET, POST, PUT, DELETE)
+   * @param {object} [options.body] - Request body (for POST/PUT)
+   * @param {object} [options.query] - Query parameters (for GET)
+   * @param {object} [options.headers] - Additional headers
+   * @returns {Promise<any>} Response data
+   */
+  const invoke = async (functionName, options = {}) => {
+    const method = (options.method || "POST").toUpperCase();
+    const init = { method };
+
+    if (options.query) {
+      init.query = options.query;
+    }
+
+    if (options.headers) {
+      init.headers = { ...options.headers };
+    }
+
+    if (options.body && method !== "GET" && method !== "HEAD") {
+      init.headers = {
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      };
+      init.body = JSON.stringify(options.body);
+    }
+
+    return http.request(`functions/${encodeURIComponent(functionName)}`, init);
+  };
+
+  // Allow both client.functions.invoke("name", opts)
+  // and client.functions.name(data) shorthand
+  return new Proxy(
+    { invoke },
+    {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+
+        const fnName = String(prop);
+        return async (data, options = {}) => {
+          return invoke(fnName, {
+            ...options,
+            body: data,
+          });
+        };
+      },
+    }
+  );
+}
+
+// =============================================================
 // Root createClient
 // =============================================================
 export function createClient(config) {
   if (!config?.serverUrl) throw new Error("serverUrl is required");
 
   const http = createHttp(config);
+  const httpFunctions = createHttp({
+    ...config,
+    serverUrl: config.serverUrl.replace(/\/entities\/?$/, ""),
+  });
 
   const client = {
     entities: createEntities(http),
     integrations: createIntegrations(http),
+    functions: createFunctions(httpFunctions),
     auth: createAuth(http, config),
     setToken: (t) => http.setToken(t, true),
     getConfig: () => ({ serverUrl: config.serverUrl }),
