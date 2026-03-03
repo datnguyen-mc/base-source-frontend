@@ -19,16 +19,7 @@ Base source frontend built with **React 18** + **Vite 6** + **TailwindCSS 3**.
 npm install
 ```
 
-### 2. Configure environment variables
-
-Create a `.env` file in the project root:
-
-```env
-VITE_DORI77_APP_ID=your_app_id
-VITE_DORI77_BACKEND_URL=https://your-domain.com/v1
-```
-
-### 3. Run development server
+### 2. Run development server
 
 ```bash
 npm run dev
