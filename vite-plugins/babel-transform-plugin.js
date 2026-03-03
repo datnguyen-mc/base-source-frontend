@@ -166,6 +166,20 @@ export function babelTransformPlugin() {
 				return null;
 			}
 
+			// Skip files that import from react-three-fiber, drei, or three.js
+			// R3F uses a "pierced props" system where data-source-location gets split
+			// into ['data', 'source', 'location'] and tries to access instance.data.source.location,
+			// which crashes because Three.js objects don't have a 'data' property.
+			if (
+				code.includes('@react-three/') ||
+				code.includes('from \'three\'') ||
+				code.includes('from "three"') ||
+				code.includes('from \'three/') ||
+				code.includes('from "three/')
+			) {
+				return null;
+			}
+
 			// Check cache - return cached result if file content hasn't changed
 			const cacheKey = getCacheKey(code, id);
 			const cached = transformCache.get(cacheKey);
