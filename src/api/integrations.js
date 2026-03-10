@@ -12,5 +12,4 @@ export const UploadFile = vibex.integrations.Core.UploadFile;
 
 export const GenerateImage = vibex.integrations.Core.GenerateImage;
 
-export const ExtractDataFromUploadedFile =
-    vibex.integrations.Core.ExtractDataFromUploadedFile;
+export const ExtractDataFromUploadedFile = vibex.integrations.Core.ExtractDataFromUploadedFile;

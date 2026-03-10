@@ -387,15 +387,15 @@ function createAuth(http, cfg) {
 
         return async (...args) => {
           switch (name) {
-            case "me":
-              return http.request("auth/me", { method: "GET" });
-
-            case "updateMe":
-              return http.request("auth/me", {
-                method: "PATCH",
+            case "register": {
+              const res = await http.request("auth/register", {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(args[0]),
+                body: JSON.stringify(args[0] ?? {}),
               });
+              if (res?.token) http.setToken(res.token, true);
+              return res;
+            }
 
             case "login": {
               const payload =
@@ -412,6 +412,47 @@ function createAuth(http, cfg) {
               if (res?.token) http.setToken(res.token, true);
               return res;
             }
+
+            case "me":
+              return http.request("auth/me", { method: "GET" });
+
+            case "refresh": {
+              const res = await http.request("auth/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+              if (res?.token) http.setToken(res.token, true);
+              return res;
+            }
+
+            case "changePassword":
+              return http.request("auth/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "updateProfile":
+              return http.request("auth/update-profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "verify":
+              return http.request("auth/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "updateMe":
+              return http.request("auth/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0]),
+              });
 
             case "logout":
               http.setToken(undefined, true);
