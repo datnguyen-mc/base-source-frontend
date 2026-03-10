@@ -171,7 +171,7 @@ function createDynamicModule(basePath, http) {
           if (last?.filter) last.filter = JSON.stringify(last.filter);
           if (last?.sort) last.sort = JSON.stringify(last.sort);
           // pure GET methods
-          const GET_METHODS = ["list", "filter", "search", "count"];
+          const GET_METHODS = ["list", "filter", "search", "count", "paging"];
 
           // Determine GET vs POST properly
           if (GET_METHODS.includes(method)) {
@@ -256,6 +256,18 @@ function createEntities(http) {
                         skip: args[0]?.skip,
                         fields: arrToCsv(args[0]?.fields),
                       }),
+                      }),
+                    });
+
+                  case "paging":
+                    return http.request(`${entity}/paging`, {
+                      method: "GET",
+                      query: clean({
+                        page: args[0]?.page,
+                        pageSize: args[0]?.pageSize,
+                        filter: args[0]?.filter ? JSON.stringify(args[0].filter) : undefined,
+                        sort: args[0]?.sort ? JSON.stringify(args[0].sort) : undefined,
+                        fields: arrToCsv(args[0]?.fields),
                       }),
                     });
 
