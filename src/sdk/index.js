@@ -95,14 +95,19 @@ function createHttp(cfg) {
 
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
-    const res = await fetchImpl(url, {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        ...(init.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    let res;
+    try {
+      res = await fetchImpl(url, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          ...(init.headers || {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    } catch {
+      return undefined;
+    }
 
     if (res.status === 204) return undefined;
 
