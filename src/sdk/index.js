@@ -95,14 +95,19 @@ function createHttp(cfg) {
 
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
-    const res = await fetchImpl(url, {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        ...(init.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    let res;
+    try {
+      res = await fetchImpl(url, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          ...(init.headers || {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    } catch {
+      return undefined;
+    }
 
     if (res.status === 204) return undefined;
 
@@ -128,7 +133,7 @@ function createHttp(cfg) {
         if (typeof window !== "undefined") {
           localStorage.removeItem(storageKey);
           localStorage.removeItem("refresh_token");
-          window.location.href = "/signin";
+          window.location.href = "/";
         }
       } catch (e) { }
 
@@ -237,7 +242,6 @@ function createEntities(http) {
     {
       get(_t, entityName) {
         const entity = String(entityName);
-        console.log("entity", entity);
         return new Proxy(
           {},
           {
@@ -250,12 +254,12 @@ function createEntities(http) {
                       method: "GET",
                       query: clean({
                         query: clean({
-                        filter: 1,
-                        sort: 1,
-                        limit: args[0]?.limit,
-                        skip: args[0]?.skip,
-                        fields: arrToCsv(args[0]?.fields),
-                      }),
+                          filter: 1,
+                          sort: 1,
+                          limit: args[0]?.limit,
+                          skip: args[0]?.skip,
+                          fields: arrToCsv(args[0]?.fields),
+                        }),
                       }),
                     });
 
@@ -273,7 +277,7 @@ function createEntities(http) {
 
                   case "get":
                     return http.request(
-                      `${entity}/${encodeURIComponent(args[0])}`,
+                      `${entity}/${encodeURIComponent(args[0])}/get`,
                       { method: "GET" }
                     );
 
@@ -304,27 +308,27 @@ function createEntities(http) {
                     const data = args[1];
                     if (isFormDataLike(data)) {
                       return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                        method: "POST",
                         body: data,
                       });
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
                       const fd = objectToFormData(data);
                       return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                        method: "POST",
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}/${id}`, {
-                      method: "PUT",
+                    return http.request(`${entity}/${id}/update`, {
+                      method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
                     });
                   }
 
                   case "delete":
-                    return http.request(`${entity}/${args[0]}`, {
-                      method: "DELETE",
+                    return http.request(`${entity}/${args[0]}/delete`, {
+                      method: "GET",
                     });
 
                   default:
@@ -471,7 +475,7 @@ function createAuth(http, cfg) {
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
                 localStorage.removeItem("refresh_token");
-                window.location.href = "/signin";
+                window.location.href = "/";
               }
               return;
 
