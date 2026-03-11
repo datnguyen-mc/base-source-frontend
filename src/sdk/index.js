@@ -128,7 +128,7 @@ function createHttp(cfg) {
         if (typeof window !== "undefined") {
           localStorage.removeItem(storageKey);
           localStorage.removeItem("refresh_token");
-          window.location.href = "/signin";
+          window.location.href = "/";
         }
       } catch (e) { }
 
@@ -237,7 +237,6 @@ function createEntities(http) {
     {
       get(_t, entityName) {
         const entity = String(entityName);
-        console.log("entity", entity);
         return new Proxy(
           {},
           {
@@ -250,12 +249,12 @@ function createEntities(http) {
                       method: "GET",
                       query: clean({
                         query: clean({
-                        filter: 1,
-                        sort: 1,
-                        limit: args[0]?.limit,
-                        skip: args[0]?.skip,
-                        fields: arrToCsv(args[0]?.fields),
-                      }),
+                          filter: 1,
+                          sort: 1,
+                          limit: args[0]?.limit,
+                          skip: args[0]?.skip,
+                          fields: arrToCsv(args[0]?.fields),
+                        }),
                       }),
                     });
 
@@ -471,7 +470,7 @@ function createAuth(http, cfg) {
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
                 localStorage.removeItem("refresh_token");
-                window.location.href = "/signin";
+                window.location.href = "/";
               }
               return;
 

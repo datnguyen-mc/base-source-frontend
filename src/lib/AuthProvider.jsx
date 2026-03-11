@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
                         .some((p) => currentPath.startsWith(p));
 
                     if (isPrivate) {
-                        navigate("/signin", { replace: true });
+                        navigate("/", { replace: true });
                     }
 
                     setIsAuthenticated(false);
