@@ -272,7 +272,7 @@ function createEntities(http) {
 
                   case "get":
                     return http.request(
-                      `${entity}/${encodeURIComponent(args[0])}`,
+                      `${entity}/${encodeURIComponent(args[0])}/get`,
                       { method: "GET" }
                     );
 
@@ -303,27 +303,27 @@ function createEntities(http) {
                     const data = args[1];
                     if (isFormDataLike(data)) {
                       return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                        method: "POST",
                         body: data,
                       });
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
                       const fd = objectToFormData(data);
                       return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                        method: "POST",
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}/${id}`, {
-                      method: "PUT",
+                    return http.request(`${entity}/${id}/update`, {
+                      method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
                     });
                   }
 
                   case "delete":
-                    return http.request(`${entity}/${args[0]}`, {
-                      method: "DELETE",
+                    return http.request(`${entity}/${args[0]}/delete`, {
+                      method: "GET",
                     });
 
                   default:

@@ -1,7 +1,7 @@
 import { vibex } from './vibexClient';
 
 export const Query = vibex.entities.Query;
-export const Paging = vibex.entities.Query.paging;
+export const User = vibex.entities.User;
 
 // auth sdk:
-export const User = vibex.auth;
+export const Auth = vibex.auth;
