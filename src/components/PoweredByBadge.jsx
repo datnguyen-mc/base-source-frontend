@@ -3,8 +3,7 @@ import { useAuth } from '@/lib/useAuth';
 
 const PoweredByBadge = () => {
     const { projectInfo } = useAuth();
-
-    if (!projectInfo?.package?.isFree) {
+    if (!projectInfo?.data?.package?.isFree) {
         return null;
     }
 
