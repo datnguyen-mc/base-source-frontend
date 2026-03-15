@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { vibex } from '@/api/vibexClient';
+import { GetProjectInfo } from '@/api/integrations';
 import { AuthContext } from './AuthContext';
 
 export const AuthProvider = ({ children }) => {
@@ -9,6 +10,7 @@ export const AuthProvider = ({ children }) => {
     const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false);
     const [authError, setAuthError] = useState(null);
     const [appPublicSettings, setAppPublicSettings] = useState(null);
+    const [projectInfo, setProjectInfo] = useState(null);
 
     useEffect(() => {
         checkAppState();
@@ -17,6 +19,20 @@ export const AuthProvider = ({ children }) => {
     const checkAppState = async () => {
         try {
             setAuthError(null);
+
+            // Fetch project info before anything else
+            try {
+                const info = await GetProjectInfo();
+                setProjectInfo(info);
+            } catch (projectError) {
+                console.error('GetProjectInfo failed:', projectError);
+                setAuthError({
+                    type: 'project_info_failed',
+                    message: projectError.message || 'Failed to load project info'
+                });
+                setIsLoadingAuth(false);
+                return;
+            }
 
             try {
                 const token = localStorage.getItem("access_token");
@@ -27,7 +43,7 @@ export const AuthProvider = ({ children }) => {
                         .some((p) => currentPath.startsWith(p));
 
                     if (isPrivate) {
-                        navigate("/signin", { replace: true });
+                        navigate("/", { replace: true });
                     }
 
                     setIsAuthenticated(false);
@@ -117,6 +133,7 @@ export const AuthProvider = ({ children }) => {
             isLoadingPublicSettings,
             authError,
             appPublicSettings,
+            projectInfo,
             logout,
             navigateToLogin,
             checkAppState,
