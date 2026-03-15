@@ -5,5 +5,4 @@ const { serverUrl } = appParams;
 
 export const vibex = createClient({
   serverUrl: serverUrl,
-  projectKey: '',
 });
