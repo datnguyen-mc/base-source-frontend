@@ -95,14 +95,19 @@ function createHttp(cfg) {
 
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
-    const res = await fetchImpl(url, {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        ...(init.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    let res;
+    try {
+      res = await fetchImpl(url, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          ...(init.headers || {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    } catch {
+      return undefined;
+    }
 
     if (res.status === 204) return undefined;
 
@@ -128,7 +133,7 @@ function createHttp(cfg) {
         if (typeof window !== "undefined") {
           localStorage.removeItem(storageKey);
           localStorage.removeItem("refresh_token");
-          window.location.href = "/signin";
+          window.location.href = "/";
         }
       } catch (e) { }
 
@@ -171,7 +176,7 @@ function createDynamicModule(basePath, http) {
           if (last?.filter) last.filter = JSON.stringify(last.filter);
           if (last?.sort) last.sort = JSON.stringify(last.sort);
           // pure GET methods
-          const GET_METHODS = ["list", "filter", "search", "count"];
+          const GET_METHODS = ["list", "filter", "search", "count", "paging"];
 
           // Determine GET vs POST properly
           if (GET_METHODS.includes(method)) {
@@ -237,7 +242,6 @@ function createEntities(http) {
     {
       get(_t, entityName) {
         const entity = String(entityName);
-        console.log("entity", entity);
         return new Proxy(
           {},
           {
@@ -250,18 +254,30 @@ function createEntities(http) {
                       method: "GET",
                       query: clean({
                         query: clean({
-                        filter: 1,
-                        sort: 1,
-                        limit: args[0]?.limit,
-                        skip: args[0]?.skip,
-                        fields: arrToCsv(args[0]?.fields),
+                          filter: 1,
+                          sort: 1,
+                          limit: args[0]?.limit,
+                          skip: args[0]?.skip,
+                          fields: arrToCsv(args[0]?.fields),
+                        }),
                       }),
+                    });
+
+                  case "paging":
+                    return http.request(`${entity}/paging`, {
+                      method: "GET",
+                      query: clean({
+                        page: args[0]?.page,
+                        pageSize: args[0]?.pageSize,
+                        filter: args[0]?.filter ? JSON.stringify(args[0].filter) : undefined,
+                        sort: args[0]?.sort ? JSON.stringify(args[0].sort) : undefined,
+                        fields: arrToCsv(args[0]?.fields),
                       }),
                     });
 
                   case "get":
                     return http.request(
-                      `${entity}/${encodeURIComponent(args[0])}`,
+                      `${entity}/${encodeURIComponent(args[0])}/get`,
                       { method: "GET" }
                     );
 
@@ -292,27 +308,27 @@ function createEntities(http) {
                     const data = args[1];
                     if (isFormDataLike(data)) {
                       return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                        method: "POST",
                         body: data,
                       });
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
                       const fd = objectToFormData(data);
                       return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                        method: "POST",
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}/${id}`, {
-                      method: "PUT",
+                    return http.request(`${entity}/${id}/update`, {
+                      method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
                     });
                   }
 
                   case "delete":
-                    return http.request(`${entity}/${args[0]}`, {
-                      method: "DELETE",
+                    return http.request(`${entity}/${args[0]}/delete`, {
+                      method: "GET",
                     });
 
                   default:
@@ -387,15 +403,15 @@ function createAuth(http, cfg) {
 
         return async (...args) => {
           switch (name) {
-            case "me":
-              return http.request("auth/me", { method: "GET" });
-
-            case "updateMe":
-              return http.request("auth/me", {
-                method: "PATCH",
+            case "register": {
+              const res = await http.request("auth/register", {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(args[0]),
+                body: JSON.stringify(args[0] ?? {}),
               });
+              if (res?.token) http.setToken(res.token, true);
+              return res;
+            }
 
             case "login": {
               const payload =
@@ -413,12 +429,53 @@ function createAuth(http, cfg) {
               return res;
             }
 
+            case "me":
+              return http.request("auth/me", { method: "GET" });
+
+            case "refresh": {
+              const res = await http.request("auth/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+              if (res?.token) http.setToken(res.token, true);
+              return res;
+            }
+
+            case "changePassword":
+              return http.request("auth/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "updateProfile":
+              return http.request("auth/update-profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "verify":
+              return http.request("auth/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "updateMe":
+              return http.request("auth/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0]),
+              });
+
             case "logout":
               http.setToken(undefined, true);
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
                 localStorage.removeItem("refresh_token");
-                window.location.href = "/signin";
+                window.location.href = "/";
               }
               return;
 
