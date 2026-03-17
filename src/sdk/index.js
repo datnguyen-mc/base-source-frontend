@@ -296,7 +296,7 @@ function createEntities(http) {
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}`, {
+                    return http.request(`${entity}/create`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
