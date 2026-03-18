@@ -1,5 +1,5 @@
 // Make HTMLElement available in non-browser environments
-const { HTMLElement = class {} } = globalThis;
+const { HTMLElement = class { } } = globalThis;
 
 export class ErrorOverlay extends HTMLElement {
 	// Multi-language translations
@@ -21,14 +21,14 @@ export class ErrorOverlay extends HTMLElement {
 			if (lang && ErrorOverlay.translations[lang]) {
 				return lang;
 			}
-		} catch (e) {}
+		} catch (e) { }
 		return 'ko';
 	}
 
 	static getOverlayHTML(title, details, componentName) {
 		const lang = ErrorOverlay.getLang();
 		const t = ErrorOverlay.translations[lang] || ErrorOverlay.translations.en;
-		
+
 		return `
 			<div id="vite-error-overlay" style="
 				position: fixed;
@@ -37,51 +37,55 @@ export class ErrorOverlay extends HTMLElement {
 				display: flex;
 				align-items: center;
 				justify-content: center;
-				padding: 20px;
+				background: #ffffff;
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 			">
-				<div style="max-width: 600px; width: 100%; text-align: center;">
-					<!-- Error Icon with Glow -->
-					<div style="position: relative; width: 64px; height: 64px; margin: 0 auto 14px;">
-						<!-- Glow Effect -->
+				<div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 24px;">
+					<!-- Spinner ring with logo -->
+					<div style="position: relative; width: 80px; height: 80px;">
+						<!-- Conic gradient spinner ring -->
 						<div style="
 							position: absolute;
-							inset: -8px;
-							background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-							border-radius: 20px;
-							opacity: 0.3;
-							filter: blur(12px);
-							animation: ve-pulse 2s ease-in-out infinite;
+							inset: 0;
+							border-radius: 9999px;
+							background: conic-gradient(from 0deg, transparent 0%, transparent 30%, #6366f1 70%, #a855f7 100%);
+							-webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
+							mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
+							animation: ve-spin 1s linear infinite;
 						"></div>
-						<!-- Icon Box -->
+						<!-- Logo centered -->
 						<div style="
-							position: relative;
-							width: 64px;
-							height: 64px;
-							background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-							border-radius: 16px;
+							position: absolute;
+							inset: 0;
 							display: flex;
 							align-items: center;
 							justify-content: center;
-							box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.4);
 						">
-							<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: ve-spin 1s linear infinite;">
-								<path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-							</svg>
+							<img src="https://cdn.vibe-x.app/assets/vibexLogo.png" alt="" style="width: 48px; height: auto; object-fit: contain;" />
 						</div>
 					</div>
-					<p style="margin-top: 16px; font-size: 16px; color: #111827; font-weight: 600;">
-						${t.title}
-					</p>
-					<!-- Help Text -->
-					<p style="margin-top: 4px; font-size: 14px; color: #4B5563;">
-						${t.text}
-					</p>
+
+					<!-- Text -->
+					<div style="min-height: 60px;">
+						<p style="margin: 0; font-size: 18px; color: #1f2937; font-weight: 600; letter-spacing: -0.025em;">
+							${t.title}
+						</p>
+						<p style="margin: 6px 0 0; font-size: 15px; color: #9ca3af;">
+							${t.text}
+						</p>
+					</div>
+
+					<!-- Animated progress dots -->
+					<div style="display: flex; align-items: center; gap: 8px;">
+						<div style="width: 8px; height: 8px; border-radius: 9999px; background-color: #818cf8; animation: ve-dot-pulse 1.4s ease-in-out infinite; animation-delay: 0s;"></div>
+						<div style="width: 8px; height: 8px; border-radius: 9999px; background-color: #818cf8; animation: ve-dot-pulse 1.4s ease-in-out infinite; animation-delay: 0.2s;"></div>
+						<div style="width: 8px; height: 8px; border-radius: 9999px; background-color: #818cf8; animation: ve-dot-pulse 1.4s ease-in-out infinite; animation-delay: 0.4s;"></div>
+					</div>
 				</div>
 			</div>
 		`;
 	}
-	
+
 	close() {
 		this.parentNode?.removeChild(this);
 	}
@@ -114,11 +118,17 @@ export class ErrorOverlay extends HTMLElement {
 		// Call editor frame with the error (via post message)
 		ErrorOverlay.sendErrorToParent(error, title, details, componentName);
 
-		// Add spin animation style to head if not exists
+		// Add animation styles to head if not exists
 		if (!document.getElementById('ve-spin-style')) {
 			const style = document.createElement('style');
 			style.id = 've-spin-style';
-			style.textContent = '@keyframes ve-spin { to { transform: rotate(360deg); } } @keyframes ve-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.5; } }';
+			style.textContent = `
+				@keyframes ve-spin { to { transform: rotate(360deg); } }
+				@keyframes ve-dot-pulse {
+					0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+					40% { opacity: 1; transform: scale(1); }
+				}
+			`;
 			document.head.appendChild(style);
 		}
 

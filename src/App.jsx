@@ -21,7 +21,6 @@ import { AuthProvider } from "./lib/AuthProvider";
 import { useAuth } from "./lib/useAuth";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import Login from "./pages/admin/Login";
-import IframeHeartbeat from "./lib/IframeHeartbeat";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 import DefaultHome from "./pages/Home";
