@@ -69,7 +69,7 @@ function objectToFormData(obj, form = new FormData(), ns) {
 // ================== http layer ==================
 function createHttp(cfg) {
   const fetchImpl = cfg.fetchImpl ?? fetch;
-  const storageKey = cfg.storageKey ?? "access_token";
+  const storageKey = "access_token";
   let token =
     cfg.token ??
     (typeof window !== "undefined"
@@ -95,6 +95,7 @@ function createHttp(cfg) {
 
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
+    const currentToken = typeof window !== "undefined" ? (localStorage.getItem(storageKey) ?? token) : token;
     let res;
     try {
       res = await fetchImpl(url, {
@@ -102,7 +103,7 @@ function createHttp(cfg) {
         headers: {
           Accept: "application/json",
           ...(init.headers || {}),
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
         },
       });
     } catch {
@@ -131,9 +132,9 @@ function createHttp(cfg) {
       try {
         token = undefined;
         if (typeof window !== "undefined") {
-          localStorage.removeItem(storageKey);
-          localStorage.removeItem("refresh_token");
-          window.location.href = "/";
+          if (!path.includes("auth/login") && !path.includes("auth/register")) {
+            window.location.href = "/";
+          }
         }
       } catch (e) { }
 
@@ -475,7 +476,7 @@ function createAuth(http, cfg) {
               http.setToken(undefined, true);
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
-                localStorage.removeItem("refresh_token");
+                localStorage.removeItem("user");
                 window.location.href = "/";
               }
               return;
