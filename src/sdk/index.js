@@ -296,7 +296,7 @@ function createEntities(http) {
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}/create`, {
+                    return http.request(`${entity}`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
@@ -409,7 +409,8 @@ function createAuth(http, cfg) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(args[0] ?? {}),
               });
-              if (res?.token) http.setToken(res.token, true);
+              if (res?.data.data.token) localStorage.setItem("access_token", res.data.data.token);
+              if (res?.data.data.user) localStorage.setItem("user", JSON.stringify(res.data.data.user));
               return res;
             }
 
@@ -424,8 +425,8 @@ function createAuth(http, cfg) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
               });
-
-              if (res?.token) http.setToken(res.token, true);
+              if (res?.data?.data?.token) localStorage.setItem("access_token", res.data.data.token);
+              if (res?.data?.data?.user) localStorage.setItem("user", JSON.stringify(res.data.data.user));
               return res;
             }
 
@@ -438,7 +439,7 @@ function createAuth(http, cfg) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(args[0] ?? {}),
               });
-              if (res?.token) http.setToken(res.token, true);
+              if (res?.data.refresh_token) http.setToken(res.data.refresh_token, true);
               return res;
             }
 
