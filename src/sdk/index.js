@@ -292,12 +292,12 @@ function createEntities(http) {
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
                       const fd = objectToFormData(data);
-                      return http.request(`${entity}`, {
+                      return http.request(`${entity}/create`, {
                         method: "POST",
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}`, {
+                    return http.request(`${entity}/create`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
@@ -315,7 +315,7 @@ function createEntities(http) {
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
                       const fd = objectToFormData(data);
-                      return http.request(`${entity}/${id}`, {
+                      return http.request(`${entity}/${id}/update`, {
                         method: "POST",
                         body: fd,
                       });
