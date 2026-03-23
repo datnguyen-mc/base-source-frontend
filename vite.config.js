@@ -77,34 +77,5 @@ export default defineConfig(({ mode }) => {
       },
       dedupe: ['react', 'react-dom']
     },
-    optimizeDeps: {
-      include: [
-        "react",
-        "react-dom",
-        "react-router-dom",
-        "zustand",
-        "@tanstack/react-query",
-        "framer-motion",
-        "recharts",
-        "lucide-react",
-        "clsx",
-        "tailwind-merge",
-        "class-variance-authority",
-        "sonner",
-        "date-fns",
-        "react-hook-form",
-        "zod",
-        "@hookform/resolvers",
-        "react-hot-toast",
-        "lodash",
-        "cmdk",
-        "react-day-picker",
-      ],
-      esbuildOptions: {
-        loader: {
-          ".js": "jsx",
-        },
-      },
-    },
   };
 });
