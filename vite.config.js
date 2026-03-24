@@ -1,10 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 import path from "path";
-import { babelTransformPlugin } from './vite-plugins/babel-transform-plugin.js';
-import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js';
-import { errorOverlayPlugin } from './vite-plugins/error-overlay-plugin.js'
-import { postMessageInject } from "./vite-plugins/postmessage-inject.js";
+import { babelTransformPlugin, visualEditPlugin, postMessageInject, errorOverlayPlugin } from '@devvibex/plugin';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
