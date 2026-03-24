@@ -1,4 +1,4 @@
-import { createClient } from '../sdk/index';
+import { createClient } from '@devvibex/sdk';
 import { appParams } from '@/lib/app-params';
 
 const { serverUrl } = appParams;
