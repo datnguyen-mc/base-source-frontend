@@ -104,7 +104,8 @@ function generateClientScript(config) {
   function sub(v){
     const idx = CONFIG.multiSelectSameLocation ? null : cEIdx;
     const dynContent = cE?.getAttribute(ATTR_DYN) || null;
-    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent};
+    const elContent=cE?cE?.innerText?.trim():null;
+    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent,elementContent:elContent};
     setL(true);clnL();
     if(isIF()){
       try{
