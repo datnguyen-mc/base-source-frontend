@@ -1,13 +1,13 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { 
-      hasError: false, 
-      error: null, 
-      errorInfo: null 
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null
     };
   }
 
@@ -20,7 +20,7 @@ class ErrorBoundary extends React.Component {
     // Log error to console for debugging
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
-    
+
     // You can also log the error to an error reporting service here
     // logErrorToService(error, errorInfo);
   }
@@ -47,56 +47,25 @@ class ErrorBoundary extends React.Component {
             <div className="w-20 h-20 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
               <AlertTriangle className="w-10 h-10 text-red-500" />
             </div>
-            
+
             {/* Title */}
             <h1 className="font-serif text-3xl text-[#0a0a0a] mb-4">
-              Something went wrong
+              Unknown error
             </h1>
-            
+
             {/* Description */}
             <p className="text-gray-600 mb-8 leading-relaxed">
-              We're sorry, but something unexpected happened.
+              An unknown error has been detected. Please refresh and check again.
             </p>
-            
-            {/* Error details (only in development) */}
-            {/* {process.env.NODE_ENV === 'development' && this.state.error && (
-              <div className="mb-8 p-4 bg-gray-100 rounded-lg text-left overflow-auto max-h-40">
-                <p className="text-xs font-mono text-red-600 break-all">
-                  {this.state.error.toString()}
-                </p>
-                {this.state.errorInfo && (
-                  <pre className="text-xs font-mono text-gray-500 mt-2 whitespace-pre-wrap">
-                    {this.state.errorInfo.componentStack}
-                  </pre>
-                )}
-              </div>
-            )} */}
-            
-            {/* Action Buttons */}
-            {/* <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={this.handleRetry}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0a0a0a] text-white text-sm tracking-wider uppercase hover:bg-[#b8860b] transition-colors rounded-lg"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Try Again
-              </button>
-              <button
-                onClick={this.handleGoHome}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-[#0a0a0a] text-[#0a0a0a] text-sm tracking-wider uppercase hover:bg-[#0a0a0a] hover:text-white transition-colors rounded-lg"
-              >
-                <Home className="w-4 h-4" />
-                Go Home
-              </button>
-            </div> */}
-            
-            {/* Reload link */}
-            {/* <button
-              onClick={this.handleReload}
-              className="mt-6 text-sm text-gray-500 hover:text-[#b8860b] underline transition-colors"
+
+            {/* Refresh Button */}
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0a0a0a] text-white text-sm tracking-wider uppercase hover:bg-[#b8860b] transition-colors rounded-lg"
             >
-              Reload the page
-            </button> */}
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
           </div>
         </div>
       );
