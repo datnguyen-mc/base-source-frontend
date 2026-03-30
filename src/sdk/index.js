@@ -104,6 +104,10 @@ function createHttp(cfg) {
           Accept: "application/json",
           ...(init.headers || {}),
           ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
+          // Add language header
+          ...(typeof window !== "undefined" ? { "Accept-Language": (localStorage.getItem("i18nextLng") || "ko") === "ko" ? "kr" : "en" } : {}),
+          // Add timezone offset header
+          ...(typeof window !== "undefined" ? { "x-timezone-offset": String(-(new Date().getTimezoneOffset())) } : {}),
         },
       });
     } catch {
