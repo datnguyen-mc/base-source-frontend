@@ -2,19 +2,22 @@
 const { HTMLElement = class { } } = globalThis;
 
 export class ErrorOverlay extends HTMLElement {
-	// Multi-language translations
+	// Multi-language translations (same as GlobalErrorFallback)
 	static translations = {
 		en: {
-			title: 'Some errors',
-			text: 'We’re retrying the failed update. Please wait a moment.'
+			title: 'Unknown error',
+			text: "An unknown error has been detected. Please refresh and check again.",
 		},
 		ko: {
-			title: '일부 오류가 발생하였습니다.',
-			text: '실패한 업데이트를 다시 시도하고 있습니다. 잠시만 기다려 주세요.'
-		}
+			title: '알수 없는 오류',
+			text: '알수 없는 오류가 확인되었습니다. 새로고침 후 다시 확인해 주세요.',
+		},
 	};
 
-	// Get language from sessionStorage (default: 'en')
+	// AlertTriangle SVG (matches lucide-react AlertTriangle icon)
+	static alertTriangleSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+
+	// Get language from sessionStorage (default: 'ko')
 	static getLang() {
 		try {
 			const lang = sessionStorage?.getItem('lang');
@@ -25,9 +28,9 @@ export class ErrorOverlay extends HTMLElement {
 		return 'ko';
 	}
 
-	static getOverlayHTML(title, details, componentName) {
+	static getOverlayHTML() {
 		const lang = ErrorOverlay.getLang();
-		const t = ErrorOverlay.translations[lang] || ErrorOverlay.translations.en;
+		const t = ErrorOverlay.translations[lang] || ErrorOverlay.translations.ko;
 
 		return `
 			<div id="vite-error-overlay" style="
@@ -37,50 +40,60 @@ export class ErrorOverlay extends HTMLElement {
 				display: flex;
 				align-items: center;
 				justify-content: center;
-				background: #ffffff;
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				padding: 0 16px;
+				background: #faf9f7;
 			">
-				<div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 24px;">
-					<!-- Spinner ring with logo -->
-					<div style="position: relative; width: 80px; height: 80px;">
-						<!-- Conic gradient spinner ring -->
-						<div style="
-							position: absolute;
-							inset: 0;
-							border-radius: 9999px;
-							background: conic-gradient(from 0deg, transparent 0%, transparent 30%, #6366f1 70%, #a855f7 100%);
-							-webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
-							mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
-							animation: ve-spin 1s linear infinite;
-						"></div>
-						<!-- Logo centered -->
-						<div style="
-							position: absolute;
-							inset: 0;
-							display: flex;
-							align-items: center;
-							justify-content: center;
-						">
-							<img src="https://cdn.vibe-x.app/assets/vibexLogo.png" alt="" style="width: 48px; height: auto; object-fit: contain;" />
-						</div>
+				<div style="max-width: 28rem; width: 100%; text-align: center;">
+					<!-- Icon -->
+					<div style="
+						width: 80px;
+						height: 80px;
+						margin: 0 auto 24px;
+						background: #fee2e2;
+						border-radius: 9999px;
+						display: flex;
+						align-items: center;
+						justify-content: center;
+					">
+						${ErrorOverlay.alertTriangleSvg}
 					</div>
 
-					<!-- Text -->
-					<div style="min-height: 60px;">
-						<p style="margin: 0; font-size: 18px; color: #1f2937; font-weight: 600; letter-spacing: -0.025em;">
-							${t.title}
-						</p>
-						<p style="margin: 6px 0 0; font-size: 15px; color: #9ca3af;">
-							${t.text}
-						</p>
-					</div>
+					<!-- Title -->
+					<h1 style="
+						margin: 0 0 16px;
+						font-size: 1.875rem;
+						line-height: 2.25rem;
+						color: #0a0a0a;
+						font-weight: 400;
+					">
+						${t.title}
+					</h1>
 
-					<!-- Animated progress dots -->
-					<div style="display: flex; align-items: center; gap: 8px;">
-						<div style="width: 8px; height: 8px; border-radius: 9999px; background-color: #818cf8; animation: ve-dot-pulse 1.4s ease-in-out infinite; animation-delay: 0s;"></div>
-						<div style="width: 8px; height: 8px; border-radius: 9999px; background-color: #818cf8; animation: ve-dot-pulse 1.4s ease-in-out infinite; animation-delay: 0.2s;"></div>
-						<div style="width: 8px; height: 8px; border-radius: 9999px; background-color: #818cf8; animation: ve-dot-pulse 1.4s ease-in-out infinite; animation-delay: 0.4s;"></div>
-					</div>
+					<!-- Description -->
+					<p style="margin: 0 0 32px; color: #4b5563; line-height: 1.625;">
+						${t.text}
+					</p>
+
+					<!-- Refresh Button -->
+					<button onclick="window.location.reload()" style="
+						display: inline-flex;
+						align-items: center;
+						justify-content: center;
+						gap: 8px;
+						padding: 10px 24px;
+						background: #0a0a0a;
+						color: #ffffff;
+						font-size: 14px;
+						font-weight: 500;
+						letter-spacing: 0.05em;
+						text-transform: uppercase;
+						border: none;
+						border-radius: 8px;
+						cursor: pointer;
+					">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+						${lang === 'ko' ? '새로고침' : 'Refresh'}
+					</button>
 				</div>
 			</div>
 		`;
@@ -91,9 +104,9 @@ export class ErrorOverlay extends HTMLElement {
 	}
 
 	static sendErrorToParent(error, title, details, componentName) {
-		// Send error to parent using framewire
 		if (globalThis.window?.parent) {
 			try {
+				globalThis.window.parent?.postMessage({ type: 'sync_tax_error', data: 'true' }, '*');
 				globalThis.window.parent?.postMessage({
 					type: "app_error",
 					error: { title, details, componentName, originalError: error }
@@ -118,20 +131,6 @@ export class ErrorOverlay extends HTMLElement {
 		// Call editor frame with the error (via post message)
 		ErrorOverlay.sendErrorToParent(error, title, details, componentName);
 
-		// Add animation styles to head if not exists
-		if (!document.getElementById('ve-spin-style')) {
-			const style = document.createElement('style');
-			style.id = 've-spin-style';
-			style.textContent = `
-				@keyframes ve-spin { to { transform: rotate(360deg); } }
-				@keyframes ve-dot-pulse {
-					0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-					40% { opacity: 1; transform: scale(1); }
-				}
-			`;
-			document.head.appendChild(style);
-		}
-
 		// Remove any existing overlay
 		const existingOverlay = document.getElementById('vite-error-overlay');
 		if (existingOverlay) {
@@ -140,7 +139,7 @@ export class ErrorOverlay extends HTMLElement {
 
 		// Create the overlay element using HTML template
 		const overlay = document.createElement('div');
-		overlay.innerHTML = ErrorOverlay.getOverlayHTML(title, details, componentName);
+		overlay.innerHTML = ErrorOverlay.getOverlayHTML();
 
 		// Add to DOM
 		document.body.appendChild(overlay.firstElementChild);
