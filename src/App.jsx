@@ -33,7 +33,7 @@ const mainPageKey = mainPage ?? Object.keys(Pages)[0] ?? 'Home';
 const MainPage = Pages[mainPageKey] ?? DefaultHome;
 
 const adminMainPageKey = adminMainPage ?? Object.keys(Admins)[0];
-const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : <></>;
+const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : () => <></>;
 
 setupIframeMessaging();
 
