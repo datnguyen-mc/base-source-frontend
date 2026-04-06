@@ -15,7 +15,6 @@ import {
   useNavigationType,
   useLocation,
 } from "react-router-dom";
-import { setupIframeMessaging } from "./lib/iframe-messaging";
 import PageNotFound from "./lib/PageNotFound";
 import { AuthProvider } from "./lib/AuthProvider";
 import { useAuth } from "./lib/useAuth";
@@ -34,8 +33,6 @@ const MainPage = Pages[mainPageKey] ?? DefaultHome;
 
 const adminMainPageKey = adminMainPage ?? Object.keys(Admins)[0];
 const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : () => <></>;
-
-setupIframeMessaging();
 
 const LayoutWrapper = ({ children, currentPageName }) =>
   Layout ? <Layout currentPageName={currentPageName}>{children}</Layout> : <></>;
