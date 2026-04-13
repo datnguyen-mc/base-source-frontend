@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 const PoweredByBadge = () => {
     const { projectInfo } = useAuth();
     const constraintsRef = useRef(null);
+    const dragStarted = useRef(false);
 
     if (!projectInfo?.data?.package?.isFree) {
         return null;
@@ -23,8 +24,21 @@ const PoweredByBadge = () => {
                 dragConstraints={constraintsRef}
                 dragMomentum={false}
                 dragElastic={0}
+                onDragStart={() => {
+                    dragStarted.current = true;
+                }}
+                onDragEnd={() => {
+                    setTimeout(() => {
+                        dragStarted.current = false;
+                    }, 50);
+                }}
+                onClick={(e) => {
+                    if (dragStarted.current) {
+                        e.preventDefault();
+                    }
+                }}
                 whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
-                className="pointer-events-auto absolute bottom-4 right-4 bg-black/75 text-white px-[14px] py-[6px] rounded-full text-xs font-semibold no-underline backdrop-blur flex items-center gap-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.3)] cursor-grab"
+                className="pointer-events-auto absolute bottom-4 right-4 bg-black/75 text-white px-[14px] py-[6px] rounded-full text-xs font-semibold no-underline backdrop-blur flex items-center gap-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.3)] cursor-grab touch-none"
             >
                 ⚡ Powered by vibeX
             </motion.a>
