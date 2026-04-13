@@ -1,39 +1,34 @@
-import React from 'react';
+import { useRef } from 'react';
 import { useAuth } from '@/lib/useAuth';
+import { motion } from 'framer-motion';
 
 const PoweredByBadge = () => {
     const { projectInfo } = useAuth();
+    const constraintsRef = useRef(null);
+
     if (!projectInfo?.data?.package?.isFree) {
         return null;
     }
 
     return (
-        <a
-            href="https://vibe-x.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-                position: 'fixed',
-                bottom: '16px',
-                right: '16px',
-                zIndex: 9999,
-                background: 'rgba(0, 0, 0, 0.75)',
-                color: '#fff',
-                padding: '6px 14px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: 600,
-                textDecoration: 'none',
-                backdropFilter: 'blur(8px)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                transition: 'opacity 0.2s',
-            }}
+        <div
+            ref={constraintsRef}
+            className="fixed inset-0 pointer-events-none z-[9999]"
         >
-            ⚡ Powered by vibeX
-        </a>
+            <motion.a
+                href="https://vibe-x.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                drag
+                dragConstraints={constraintsRef}
+                dragMomentum={false}
+                dragElastic={0}
+                whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
+                className="pointer-events-auto absolute bottom-4 right-4 bg-black/75 text-white px-[14px] py-[6px] rounded-full text-xs font-semibold no-underline backdrop-blur flex items-center gap-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.3)] cursor-grab"
+            >
+                ⚡ Powered by vibeX
+            </motion.a>
+        </div>
     );
 };
 
