@@ -7,11 +7,11 @@
  */
 
 const DEFAULT_TRANSLATIONS = {
-  en: { placeholder: 'What to change?' },
-  ko: { placeholder: '무엇을 변경하시겠습니까?' },
-  vn: { placeholder: 'Bạn muốn thay đổi gì?' },
-  jp: { placeholder: '何を変更しますか？' },
-  ch: { placeholder: '你想改什么？' },
+  en: { placeholder: 'What to change?', uploadImage: 'Upload Image' },
+  ko: { placeholder: '무엇을 변경하시겠습니까?', uploadImage: '이미지 업로드' },
+  vn: { placeholder: 'Bạn muốn thay đổi gì?', uploadImage: 'Tải ảnh lên' },
+  jp: { placeholder: '何を変更しますか？', uploadImage: '画像をアップロード' },
+  ch: { placeholder: '你想改什么？', uploadImage: '上传图片' },
 };
 
 const DEFAULT_OPTIONS = {
@@ -101,11 +101,12 @@ function generateClientScript(config) {
   function clrH(){aH.forEach(h=>h.remove());aL.forEach(l=>l.remove());aH=[];aL=[];cL=null}
   function clrAll(){clsF();clrH()}
   
-  function sub(v){
+  function sub(v, files = []){
     const idx = CONFIG.multiSelectSameLocation ? null : cEIdx;
     const dynContent = cE?.getAttribute(ATTR_DYN) || null;
     const elContent=cE?cE?.innerText?.trim():null;
     const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent,elementContent:elContent};
+    if (files && files.length > 0) d.files = files;
     setL(true);clnL();
     if(isIF()){
       try{
@@ -120,24 +121,159 @@ function generateClientScript(config) {
   function cIF(el){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY;
     const f=document.createElement('div');f.className='ve-f';
-    f.style.cssText=\`position:absolute;top:\${r.bottom+sy+8}px;left:\${r.left+sx}px;min-width:300px;max-width:400px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.05);z-index:100001;display:flex;align-items:center;padding:8px 12px;gap:8px;font-family:-apple-system,sans-serif\`;
-    const bb=document.createElement('button');bb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>';
-    bb.style.cssText='background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;display:flex;border-radius:4px';bb.onclick=clsF;
+    f.style.cssText=\`position:absolute;top:\${r.bottom+sy+8}px;left:\${r.left+sx}px;min-width:300px;max-width:300px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.05);z-index:100001;display:flex;align-items:center;padding:8px 12px;gap:8px;display:flex;flex-direction:column;align-items:stretch;font-family:-apple-system,sans-serif\`;
+    
+    const pcList = document.createElement('div');
+    pcList.className = 've-pclist';
+    pcList.style.cssText = 'display:none;gap:8px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid #f3f4f6;margin-bottom:2px';
+    
+    const ir = document.createElement('div');
+    ir.style.cssText = 'display:flex;align-items:center;gap:6px;width:100%';
+    
+    const bb=document.createElement('button');bb.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>';
+    bb.style.cssText='background:transparent;border:none;cursor:pointer;padding:6px;color:#6b7280;display:flex;border-radius:6px;transition:all 0.2s';
+    bb.onmouseenter = () => { bb.style.background = '#f3f4f6'; bb.style.color = '#374151'; };
+    bb.onmouseleave = () => { bb.style.background = 'transparent'; bb.style.color = '#6b7280'; };
+    bb.onclick=clsF;
+    
+    let selectedFiles = [];
+    
+    const ab=document.createElement('button');ab.className='ve-ab';ab.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+    ab.style.cssText='background:transparent;border:none;cursor:pointer;padding:6px;color:#6b7280;display:flex;border-radius:6px;transition:all 0.2s';
+    ab.onmouseenter = () => { if(!iS && !inputDisabled) { ab.style.background = '#f3f4f6'; ab.style.color = '#374151'; } };
+    ab.onmouseleave = () => { if(!iS && !inputDisabled) { ab.style.background = 'transparent'; ab.style.color = '#6b7280'; } };
+    
+    const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.multiple=true;fi.style.display='none';
+    ab.onclick = () => { if(!iS && !inputDisabled) fi.click(); };
+    
     const t = CONFIG.translations[CONFIG.language] || CONFIG.translations['en'];
+    if (t.uploadImage) ab.title = t.uploadImage;
     const ip=document.createElement('input');ip.type='text';ip.placeholder=t.placeholder;
-    ip.style.cssText='flex:1;border:none;outline:none;font-size:14px;color:#374151;background:transparent';
+    ip.style.cssText='flex:1;border:none;outline:none;font-size:14px;color:#374151;background:transparent;min-width:0;padding:4px 2px';
     const sb=document.createElement('button');
     sb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>';
-    sb.disabled=true;sb.style.cssText=\`background:\${SB};opacity:0.5;border:none;cursor:not-allowed;padding:6px;color:white;display:flex;border-radius:6px\`;
+    sb.disabled=true;
+    sb.style.cssText=\`background:\${SB};opacity:0.5;border:none;cursor:not-allowed;padding:8px;color:white;display:flex;border-radius:8px;transition:all 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.1)\`;
     aSB=sb;
-    const upd=()=>{if(iS||inputDisabled)return;const h=ip.value.trim().length>0;sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed'};
-    ip.oninput=upd;ip.onkeydown=(e)=>{if(e.key==='Enter'&&ip.value.trim()&&!iS&&!inputDisabled)sub(ip.value.trim());else if(e.key==='Escape')clsF()};
-    sb.onclick=()=>{if(ip.value.trim()&&!iS&&!inputDisabled)sub(ip.value.trim())};
+    
+    const upd=()=>{
+      if(iS||inputDisabled)return;
+      const h=ip.value.trim().length>0 || selectedFiles.length>0;
+      sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed';
+      if(h) {
+        sb.style.transform = 'translateY(-1px)';
+        sb.style.boxShadow = '0 4px 6px rgba(0,0,0,0.15)';
+      } else {
+        sb.style.transform = 'none';
+        sb.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+      }
+    };
+    
+    const renderPreviews = () => {
+      pcList.innerHTML = '';
+      if(selectedFiles.length === 0) {
+        pcList.style.display = 'none';
+      } else {
+        pcList.style.display = 'flex';
+        selectedFiles.forEach((file, index) => {
+          const pc = document.createElement('div');
+          pc.style.cssText = 'position:relative;align-items:center;justify-content:center;width:44px;height:44px;border-radius:6px;border:1px solid #e5e7eb;overflow:hidden;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,0.05)';
+          const pcImg = document.createElement('img');
+          pcImg.style.cssText = 'width:100%;height:100%;object-fit:cover';
+          pcImg.src = URL.createObjectURL(file);
+          const pcBtn = document.createElement('button');
+          pcBtn.className = 've-pc-btn';
+          pcBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+          pcBtn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.5);border:none;cursor:pointer;padding:3px;color:#fff;display:flex;border-radius:4px;transition:background 0.2s;backdrop-filter:blur(2px)';
+          
+          pcBtn.onmouseenter = () => { if(!iS && !inputDisabled) pcBtn.style.background = 'rgba(0,0,0,0.8)'; };
+          pcBtn.onmouseleave = () => { if(!iS && !inputDisabled) pcBtn.style.background = 'rgba(0,0,0,0.5)'; };
+          
+          pcBtn.onclick = () => {
+            if(iS || inputDisabled) return;
+            selectedFiles.splice(index, 1);
+            URL.revokeObjectURL(pcImg.src);
+            renderPreviews();
+            upd();
+          };
+          
+          pc.append(pcImg, pcBtn);
+          pcList.append(pc);
+        });
+      }
+      if(inputDisabled) {
+        const btns = pcList.querySelectorAll('.ve-pc-btn');
+        btns.forEach(btn => {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+        });
+      }
+    };
+    
+    ip.oninput=upd;
+    ip.onkeydown=(e)=>{if(e.key==='Enter'&&(ip.value.trim()||selectedFiles.length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles);else if(e.key==='Escape')clsF()};
+    sb.onclick=()=>{if((ip.value.trim()||selectedFiles.length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles)};
+    
+    fi.onchange = (e) => {
+      const newFiles = Array.from(e.target.files);
+      if(newFiles.length > 0) {
+        selectedFiles = [...selectedFiles, ...newFiles];
+        renderPreviews();
+        upd();
+      }
+      fi.value = '';
+    };
+    
     const cb=document.createElement('button');cb.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
     cb.style.cssText='background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;display:flex;border-radius:4px';cb.onclick=clsF;
     const dv=document.createElement('div');dv.style.cssText='width:1px;background:#e5e7eb;height:24px;margin-left:5px';
-    f.append(bb,ip,sb,dv,cb);document.body.appendChild(f);aF=f;
+    
+    ir.append(bb,ip,ab,fi,sb,dv,cb);
+    f.append(pcList, ir);
+    document.body.appendChild(f);aF=f;
     f.addEventListener('mouseenter',clrH);f.addEventListener('click',e=>e.stopPropagation());
+    
+    f.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (!inputDisabled && !iS) {
+        f.style.borderColor = SB;
+        f.style.background = '#f9fafb';
+      }
+    });
+    f.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      f.style.borderColor = '#f3f4f6';
+      f.style.background = '#fff';
+    });
+    f.addEventListener('drop', (e) => {
+      e.preventDefault();
+      f.style.borderColor = '#f3f4f6';
+      f.style.background = '#fff';
+      if (inputDisabled || iS) return;
+      const newFiles = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+      if (newFiles.length > 0) {
+        selectedFiles = [...selectedFiles, ...newFiles];
+        renderPreviews();
+        upd();
+      }
+    });
+    f.addEventListener('paste', (e) => {
+      if (inputDisabled || iS) return;
+      const items = (e.clipboardData || window.clipboardData).items;
+      const newFiles = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          newFiles.push(items[i].getAsFile());
+        }
+      }
+      if (newFiles.length > 0) {
+        e.preventDefault();
+        selectedFiles = [...selectedFiles, ...newFiles];
+        renderPreviews();
+        upd();
+      }
+    });
     setTimeout(()=>ip.focus(),50);
     const fr=f.getBoundingClientRect();
     if(fr.right>innerWidth)f.style.left=\`\${innerWidth-fr.width-16}px\`;
@@ -145,6 +281,7 @@ function generateClientScript(config) {
     if(inputDisabled){
       ip.disabled=true;ip.style.opacity='0.5';ip.style.cursor='not-allowed';
       sb.disabled=true;sb.style.opacity='0.5';sb.style.cursor='not-allowed';
+      ab.disabled=true;ab.style.opacity='0.5';ab.style.cursor='not-allowed';
     }
   }
   
@@ -209,6 +346,8 @@ function generateClientScript(config) {
       const t = CONFIG.translations[lang];
       const ip = aF.querySelector('input');
       if (ip) ip.placeholder = t.placeholder;
+      const ab = aF.querySelector('.ve-ab');
+      if (ab && t.uploadImage) ab.title = t.uploadImage;
     }
   }
   
@@ -243,22 +382,34 @@ function generateClientScript(config) {
   
   function setInputDisabled(disabled) {
     inputDisabled = !!disabled;
-    if (!aF) {
-      return;
-    }
-    const ip = aF.querySelector('input');
+    if (!aF) return;
+    const ip = aF.querySelector('input[type="text"]');
     if (ip) {
       ip.disabled = !!disabled;
       ip.style.opacity = disabled ? '0.5' : '1';
       ip.style.cursor = disabled ? 'not-allowed' : 'text';
     }
+    const ab = aF.querySelector('.ve-ab');
+    if (ab) {
+      ab.disabled = !!disabled;
+      ab.style.opacity = disabled ? '0.5' : '1';
+      ab.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    }
+    const pcBtns = aF.querySelectorAll('.ve-pc-btn');
+    pcBtns.forEach(btn => {
+      btn.disabled = !!disabled;
+      btn.style.opacity = disabled ? '0.5' : '1';
+      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    });
     if (aSB) {
       if (disabled) {
         aSB.disabled = true;
         aSB.style.opacity = '0.5';
         aSB.style.cursor = 'not-allowed';
       } else {
-        const hasValue = ip && ip.value.trim().length > 0;
+        const pcList = aF.querySelector('.ve-pclist');
+        const hasFiles = pcList && pcList.style.display === 'flex';
+        const hasValue = (ip && ip.value.trim().length > 0) || hasFiles;
         aSB.disabled = !hasValue;
         aSB.style.opacity = hasValue ? '1' : '0.5';
         aSB.style.cursor = hasValue ? 'pointer' : 'not-allowed';
