@@ -121,7 +121,7 @@ function generateClientScript(config) {
   function cIF(el){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY;
     const f=document.createElement('div');f.className='ve-f';
-    f.style.cssText=\`position:absolute;top:\${r.bottom+sy+8}px;left:\${r.left+sx}px;min-width:300px;max-width:300px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.05);z-index:100001;display:flex;align-items:center;padding:8px 12px;gap:8px;display:flex;flex-direction:column;align-items:stretch;font-family:-apple-system,sans-serif\`;
+    f.style.cssText=\`position:absolute;top:\${r.bottom+sy+8}px;left:\${r.left+sx}px;min-width:320px;max-width:320px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.05);z-index:100001;display:flex;align-items:center;padding:8px 12px;gap:8px;display:flex;flex-direction:column;align-items:stretch;font-family:-apple-system,sans-serif\`;
     
     const pcList = document.createElement('div');
     pcList.className = 've-pclist';
@@ -149,7 +149,7 @@ function generateClientScript(config) {
     const t = CONFIG.translations[CONFIG.language] || CONFIG.translations['en'];
     if (t.uploadImage) ab.title = t.uploadImage;
     const ip=document.createElement('input');ip.type='text';ip.placeholder=t.placeholder;
-    ip.style.cssText='flex:1;border:none;outline:none;font-size:14px;color:#374151;background:transparent;min-width:0;padding:4px 2px';
+    ip.style.cssText='flex:1;border:none;outline:none;font-size:14px;color:#374151;background:transparent;min-width:0';
     const sb=document.createElement('button');
     sb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>';
     sb.disabled=true;
