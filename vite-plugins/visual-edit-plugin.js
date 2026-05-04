@@ -7,11 +7,11 @@
  */
 
 const DEFAULT_TRANSLATIONS = {
-  en: { placeholder: 'What to change?', uploadImage: 'Upload Image' },
-  ko: { placeholder: '무엇을 변경하시겠습니까?', uploadImage: '이미지 업로드' },
-  vn: { placeholder: 'Bạn muốn thay đổi gì?', uploadImage: 'Tải ảnh lên' },
-  jp: { placeholder: '何を変更しますか？', uploadImage: '画像をアップロード' },
-  ch: { placeholder: '你想改什么？', uploadImage: '上传图片' },
+  en: { placeholder: 'What to change?', uploadImage: 'Upload Image', tooManyFilesTitle: 'Upload limit reached', tooManyFiles: 'You can upload up to {{max}} files (currently {{current}}). All selected files were cancelled.', fileTooLargeTitle: 'File too large', fileTooLarge: 'Max size: {{maxImage}}. Rejected: {{rejected}}', totalTooLargeTitle: 'Total size exceeded', totalTooLarge: 'Total upload size exceeds {{max}} (current: {{total}})', invalidFileTypeTitle: 'Invalid file type', invalidFileType: 'Only image files (JPG, PNG, GIF, WEBP, SVG) are allowed.' },
+  ko: { placeholder: '무엇을 변경하시겠습니까?', uploadImage: '이미지 업로드', tooManyFilesTitle: '업로드 한도 초과', tooManyFiles: '최대 {{max}}개 파일까지 업로드할 수 있습니다 (현재 {{current}}개). 선택한 파일이 모두 취소되었습니다.', fileTooLargeTitle: '파일 크기 초과', fileTooLarge: '최대 크기: {{maxImage}}. 거부됨: {{rejected}}', totalTooLargeTitle: '총 크기 초과', totalTooLarge: '총 업로드 크기가 {{max}}을 초과합니다 (현재: {{total}})', invalidFileTypeTitle: '지원하지 않는 파일 형식', invalidFileType: '이미지 파일(JPG, PNG, GIF, WEBP, SVG)만 업로드할 수 있습니다.' },
+  vn: { placeholder: 'Bạn muốn thay đổi gì?', uploadImage: 'Tải ảnh lên', tooManyFilesTitle: 'Vượt quá giới hạn tải lên', tooManyFiles: 'Bạn có thể tải lên tối đa {{max}} tệp (hiện tại {{current}}). Đã hủy tất cả tệp được chọn.', fileTooLargeTitle: 'Tệp quá lớn', fileTooLarge: 'Kích thước tối đa: {{maxImage}}. Bị từ chối: {{rejected}}', totalTooLargeTitle: 'Vượt quá tổng dung lượng', totalTooLarge: 'Tổng dung lượng vượt quá {{max}} (hiện tại: {{total}})', invalidFileTypeTitle: 'Loại tệp không hợp lệ', invalidFileType: 'Chỉ hỗ trợ tệp hình ảnh (JPG, PNG, GIF, WEBP, SVG).' },
+  jp: { placeholder: '何を変更しますか？', uploadImage: '画像をアップロード', tooManyFilesTitle: 'アップロード上限に達しました', tooManyFiles: '最大 {{max}} 個のファイルをアップロードできます（現在 {{current}} 個）。すべての選択がキャンセルされました。', fileTooLargeTitle: 'ファイルが大きすぎます', fileTooLarge: '最大サイズ: {{maxImage}}。拒否: {{rejected}}', totalTooLargeTitle: '合計サイズ超過', totalTooLarge: '合計アップロードサイズが {{max}} を超えています（現在: {{total}}）', invalidFileTypeTitle: '無効なファイル形式', invalidFileType: '画像ファイル（JPG、PNG、GIF、WEBP、SVG）のみ許可されています。' },
+  ch: { placeholder: '你想改什么？', uploadImage: '上传图片', tooManyFilesTitle: '上传达到上限', tooManyFiles: '最多允许上传 {{max}} 个文件（当前 {{current}}）。已取消所有选择。', fileTooLargeTitle: '文件过大', fileTooLarge: '最大大小: {{maxImage}}。被拒绝: {{rejected}}', totalTooLargeTitle: '总大小超过限制', totalTooLarge: '总上传大小超过 {{max}}（当前: {{total}}）', invalidFileTypeTitle: '文件类型无效', invalidFileType: '仅允许使用图像文件（JPG、PNG、GIF、WEBP、SVG）。' },
 };
 
 const DEFAULT_OPTIONS = {
@@ -62,6 +62,152 @@ function generateClientScript(config) {
   function hexToRgba(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return\`rgba(\${r},\${g},\${b},\${a})\`}
   
   let aH=[],aL=[],cL=null,sL=null,sH=[],sLb=[],aF=null,cE=null,iS=false,aSB=null,sT=null,mH=null,init=false,cEIdx=null,hE=null,inputDisabled=CONFIG.defaultInputDisabled;
+  
+  function showToast(title, msg) {
+    let tc = document.getElementById('ve-toast-container');
+    if (!tc) {
+      tc = document.createElement('div');
+      tc.id = 've-toast-container';
+      tc.style.cssText = 'position:fixed;top:24px;right:24px;z-index:2147483647;display:flex;flex-direction:column;gap:16px;max-width:448px;width:calc(100vw - 32px);';
+      document.body.appendChild(tc);
+      
+      const s = document.createElement('style');
+      s.textContent = '@keyframes ve-toast-in{from{transform:translateY(-20px) scale(0.95);opacity:0}to{transform:translateY(0) scale(1);opacity:1}} @keyframes ve-toast-out{from{transform:translateY(0) scale(1);opacity:1}to{transform:translateY(-20px) scale(0.95);opacity:0}}';
+      document.head.appendChild(s);
+    }
+    
+    const t = document.createElement('div');
+    t.style.cssText = 'background:linear-gradient(to bottom right, #fef2f2, #fdf2f8);border:2px solid #fecaca;border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);padding:20px;backdrop-filter:blur(24px);font-family:-apple-system,sans-serif;animation:ve-toast-in 0.2s ease-out forwards;position:relative;';
+    
+    const flexCont = document.createElement('div');
+    flexCont.style.cssText = 'display:flex;align-items:flex-start;gap:16px;';
+    
+    const iconCont = document.createElement('div');
+    iconCont.style.cssText = 'flex-shrink:0;width:40px;height:40px;background:linear-gradient(to bottom right, #ef4444, #ec4899);border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);';
+    iconCont.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>';
+    flexCont.appendChild(iconCont);
+    
+    const textCont = document.createElement('div');
+    textCont.style.cssText = 'flex:1;min-width:0;';
+    
+    if (title) {
+      const h = document.createElement('h3');
+      h.style.cssText = 'font-weight:700;font-size:16px;color:#111827;margin:0 0 4px 0;';
+      h.textContent = title;
+      textCont.appendChild(h);
+    }
+    
+    const b = document.createElement('p');
+    b.style.cssText = 'font-size:14px;color:#4b5563;line-height:1.625;margin:0;word-break:break-word;';
+    b.innerHTML = msg.replace(/\\n/g, '<br/>');
+    textCont.appendChild(b);
+    
+    flexCont.appendChild(textCont);
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.style.cssText = 'position:relative;z-index:10;flex-shrink:0;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background-color 0.2s;cursor:pointer;border:none;background:transparent;padding:0;';
+    closeBtn.onmouseenter = () => closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
+    closeBtn.onmouseleave = () => closeBtn.style.background = 'transparent';
+    closeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+    flexCont.appendChild(closeBtn);
+    
+    t.appendChild(flexCont);
+    tc.appendChild(t);
+    
+    const removeToast = () => {
+      t.style.animation = 've-toast-out 0.2s ease-in forwards';
+      setTimeout(() => { t.remove(); if(tc.childNodes.length === 0) tc.remove(); }, 200);
+    };
+    
+    closeBtn.onclick = (e) => { e.stopPropagation(); removeToast(); };
+    setTimeout(removeToast, 4000);
+  }
+
+  
+  const UPLOAD_LIMITS = {
+    IMAGE_MAX: 5 * 1024 * 1024,   // 5 MB per image
+    FILE_MAX: 20 * 1024 * 1024,   // 20 MB per non-image file
+    TOTAL_MAX: 50 * 1024 * 1024,  // 50 MB total size
+    MAX_COUNT: 10,                // max 10 items total
+  };
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return \`\${bytes}B\`;
+    if (bytes < 1024 * 1024) return \`\${(bytes / 1024).toFixed(0)}KB\`;
+    return \`\${(bytes / (1024 * 1024)).toFixed(1)}MB\`;
+  }
+
+  function validateUploadFiles(files, options = {}) {
+    const imageMax = options.imageMax ?? UPLOAD_LIMITS.IMAGE_MAX;
+    const fileMax = options.fileMax ?? UPLOAD_LIMITS.FILE_MAX;
+    const totalMax = options.totalMax ?? UPLOAD_LIMITS.TOTAL_MAX;
+    const maxCount = options.maxCount ?? UPLOAD_LIMITS.MAX_COUNT;
+    const currentCount = options.currentCount ?? 0;
+
+    const errors = [];
+    let candidateFiles = [...files];
+
+    const remaining = Math.max(0, maxCount - currentCount);
+    if (candidateFiles.length > remaining) {
+      const excess = candidateFiles.length - remaining;
+      errors.push({
+        key: "upload.tooManyFiles",
+        params: { max: maxCount, current: currentCount, excess },
+      });
+      candidateFiles = [];
+    }
+
+    const validTypes = [];
+    let hasInvalidType = false;
+    for (const file of candidateFiles) {
+      if (file.type.startsWith('image/')) {
+        validTypes.push(file);
+      } else {
+        hasInvalidType = true;
+      }
+    }
+    if (hasInvalidType) {
+      errors.push({ key: "upload.invalidFileType", params: {} });
+    }
+    candidateFiles = validTypes;
+
+    const validFiles = [];
+    const rejectedNames = [];
+
+    for (const file of candidateFiles) {
+      if (file.size > imageMax) {
+        rejectedNames.push(\`\${file.name} (\${formatFileSize(file.size)})\`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (rejectedNames.length > 0) {
+      errors.push({
+        key: "upload.fileTooLarge",
+        params: {
+          maxImage: formatFileSize(imageMax),
+          rejected: rejectedNames.join(", "),
+        },
+      });
+    }
+
+    if (validFiles.length > 0) {
+      const totalSize = validFiles.reduce((sum, f) => sum + f.size, 0);
+      if (totalSize > totalMax) {
+        errors.push({
+          key: "upload.totalTooLarge",
+          params: {
+            max: formatFileSize(totalMax),
+            total: formatFileSize(totalSize),
+          },
+        });
+        validFiles.length = 0;
+      }
+    }
+
+    return { validFiles, errors };
+  }
   
   function cHl(el,sel=false){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY,c=sel?SC:HC;
@@ -138,6 +284,40 @@ function generateClientScript(config) {
     
     let selectedFiles = [];
     
+    const handleFiles = (newFiles) => {
+      if (newFiles.length === 0) return;
+      const { validFiles, errors } = validateUploadFiles(newFiles, { currentCount: selectedFiles.length });
+      if (errors.length > 0) {
+        const t = CONFIG.translations[CONFIG.language] || CONFIG.translations['en'];
+        errors.forEach(e => {
+          let title = '';
+          let msg = '';
+          if (e.key === 'upload.tooManyFiles') {
+             title = t.tooManyFilesTitle || 'Upload limit reached';
+             msg = (t.tooManyFiles || 'Too many files (max {{max}}).').replace('{{max}}', e.params.max).replace('{{current}}', e.params.current);
+          }
+          if (e.key === 'upload.fileTooLarge') {
+             title = t.fileTooLargeTitle || 'File too large';
+             msg = (t.fileTooLarge || 'Files too large: {{rejected}}.').replace('{{rejected}}', e.params.rejected).replace('{{maxImage}}', e.params.maxImage);
+          }
+          if (e.key === 'upload.totalTooLarge') {
+             title = t.totalTooLargeTitle || 'Total size exceeded';
+             msg = (t.totalTooLarge || 'Total size too large (max {{max}}).').replace('{{max}}', e.params.max).replace('{{total}}', e.params.total);
+          }
+          if (e.key === 'upload.invalidFileType') {
+             title = t.invalidFileTypeTitle || 'Invalid file type';
+             msg = t.invalidFileType || 'Invalid file type.';
+          }
+          showToast(title, msg);
+        });
+      }
+      if (validFiles.length > 0) {
+        selectedFiles = [...selectedFiles, ...validFiles];
+        renderPreviews();
+        upd();
+      }
+    };
+    
     const ab=document.createElement('button');ab.className='ve-ab';ab.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
     ab.style.cssText='background:transparent;border:none;cursor:pointer;padding:6px;color:#6b7280;display:flex;border-radius:6px;transition:all 0.2s';
     ab.onmouseenter = () => { if(!iS && !inputDisabled) { ab.style.background = '#f3f4f6'; ab.style.color = '#374151'; } };
@@ -181,6 +361,7 @@ function generateClientScript(config) {
           const pcImg = document.createElement('img');
           pcImg.style.cssText = 'width:100%;height:100%;object-fit:cover';
           pcImg.src = URL.createObjectURL(file);
+          pc.append(pcImg);
           const pcBtn = document.createElement('button');
           pcBtn.className = 've-pc-btn';
           pcBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
@@ -192,12 +373,12 @@ function generateClientScript(config) {
           pcBtn.onclick = () => {
             if(iS || inputDisabled) return;
             selectedFiles.splice(index, 1);
-            URL.revokeObjectURL(pcImg.src);
+            URL.revokeObjectURL(pc.querySelector('img').src);
             renderPreviews();
             upd();
           };
           
-          pc.append(pcImg, pcBtn);
+          pc.append(pcBtn);
           pcList.append(pc);
         });
       }
@@ -218,9 +399,7 @@ function generateClientScript(config) {
     fi.onchange = (e) => {
       const newFiles = Array.from(e.target.files);
       if(newFiles.length > 0) {
-        selectedFiles = [...selectedFiles, ...newFiles];
-        renderPreviews();
-        upd();
+        handleFiles(newFiles);
       }
       fi.value = '';
     };
@@ -251,11 +430,9 @@ function generateClientScript(config) {
       f.style.borderColor = '#f3f4f6';
       f.style.background = '#fff';
       if (inputDisabled || iS) return;
-      const newFiles = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+      const newFiles = Array.from(e.dataTransfer.files);
       if (newFiles.length > 0) {
-        selectedFiles = [...selectedFiles, ...newFiles];
-        renderPreviews();
-        upd();
+        handleFiles(newFiles);
       }
     });
     f.addEventListener('paste', (e) => {
@@ -263,15 +440,13 @@ function generateClientScript(config) {
       const items = (e.clipboardData || window.clipboardData).items;
       const newFiles = [];
       for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith('image/')) {
+        if (items[i].kind === 'file') {
           newFiles.push(items[i].getAsFile());
         }
       }
       if (newFiles.length > 0) {
         e.preventDefault();
-        selectedFiles = [...selectedFiles, ...newFiles];
-        renderPreviews();
-        upd();
+        handleFiles(newFiles);
       }
     });
     setTimeout(()=>ip.focus(),50);
