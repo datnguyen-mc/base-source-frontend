@@ -158,7 +158,7 @@ function generateClientScript(config) {
     
     const upd=()=>{
       if(iS||inputDisabled)return;
-      const h=ip.value.trim().length>0 || selectedFiles.length>0;
+      const h=ip.value.trim().length>0;
       sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed';
       if(h) {
         sb.style.transform = 'translateY(-1px)';
@@ -212,8 +212,8 @@ function generateClientScript(config) {
     };
     
     ip.oninput=upd;
-    ip.onkeydown=(e)=>{if(e.key==='Enter'&&(ip.value.trim()||selectedFiles.length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles);else if(e.key==='Escape')clsF()};
-    sb.onclick=()=>{if((ip.value.trim()||selectedFiles.length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles)};
+    ip.onkeydown=(e)=>{if(e.key==='Enter'&&(ip.value.trim().length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles);else if(e.key==='Escape')clsF()};
+    sb.onclick=()=>{if((ip.value.trim().length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles)};
     
     fi.onchange = (e) => {
       const newFiles = Array.from(e.target.files);
@@ -407,9 +407,7 @@ function generateClientScript(config) {
         aSB.style.opacity = '0.5';
         aSB.style.cursor = 'not-allowed';
       } else {
-        const pcList = aF.querySelector('.ve-pclist');
-        const hasFiles = pcList && pcList.style.display === 'flex';
-        const hasValue = (ip && ip.value.trim().length > 0) || hasFiles;
+        const hasValue = ip && ip.value.trim().length > 0;
         aSB.disabled = !hasValue;
         aSB.style.opacity = hasValue ? '1' : '0.5';
         aSB.style.cursor = hasValue ? 'pointer' : 'not-allowed';
