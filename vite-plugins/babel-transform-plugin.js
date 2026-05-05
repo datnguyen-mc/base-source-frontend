@@ -99,6 +99,14 @@ function checkIfElementHasDynamicContent(jsxElement) {
 		});
 	}
 
+	// Check attributes of the JSX element
+	if (jsxElement.openingElement && jsxElement.openingElement.attributes) {
+		jsxElement.openingElement.attributes.forEach(attr => {
+			if (hasDynamicContent) return;
+			traverseNode(attr);
+		});
+	}
+
 	// Check all children of the JSX element
 	jsxElement.children.forEach(child => {
 		if (hasDynamicContent) return; // Early exit if already found dynamic content
