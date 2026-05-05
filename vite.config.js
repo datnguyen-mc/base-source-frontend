@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
   const isProduction = env.VITE_APP_ENV === 'production';
 
   return {
+    cacheDir: '/tmp/.vite-cache',
     plugins: [
       react(),
       ...(!isProduction
@@ -77,5 +78,40 @@ export default defineConfig(({ mode }) => {
       },
       dedupe: ['react', 'react-dom']
     },
+<<<<<<< HEAD
+=======
+    optimizeDeps: {
+      noDiscovery: false,
+      holdUntilCrawlEnd: false,
+      force: false,
+      include: [
+        "react",
+        "react-dom",
+        "react-router-dom",
+        "zustand",
+        "@tanstack/react-query",
+        "framer-motion",
+        "recharts",
+        "lucide-react",
+        "clsx",
+        "tailwind-merge",
+        "class-variance-authority",
+        "sonner",
+        "date-fns",
+        "react-hook-form",
+        "zod",
+        "@hookform/resolvers",
+        "react-hot-toast",
+        "lodash",
+        "cmdk",
+        "react-day-picker",
+      ],
+      esbuildOptions: {
+        loader: {
+          ".js": "jsx",
+        },
+      },
+    },
+>>>>>>> b38ccb1 (Update cache for vite)
   };
 });
