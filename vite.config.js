@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   const isProduction = env.VITE_APP_ENV === 'production';
 
   return {
-    cacheDir: '/base/.vite-cache',
+    cacheDir: '/tmp/.vite-cache',
     plugins: [
       react(),
       ...(!isProduction
@@ -79,6 +79,9 @@ export default defineConfig(({ mode }) => {
       dedupe: ['react', 'react-dom']
     },
     optimizeDeps: {
+      noDiscovery: false,
+      holdUntilCrawlEnd: false,
+      force: false,
       include: [
         'react',
         'react-dom',
