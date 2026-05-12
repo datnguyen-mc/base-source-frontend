@@ -1,98 +1,98 @@
-import { useEffect } from "react";
-import { useRouteError, isRouteErrorResponse } from "react-router-dom";
+import { useEffect } from 'react';
+import { useRouteError, isRouteErrorResponse } from 'react-router-dom';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
+
+const TRANSLATIONS = {
+  ko: {
+    title: '알수 없는 오류',
+    desc: '알수 없는 오류가 확인되었습니다. 새로고침 후 다시 확인해 주세요.',
+    refresh: '새로고침',
+  },
+  en: {
+    title: 'Unknown error',
+    desc: 'An unknown error has been detected. Please refresh and check again.',
+    refresh: 'Refresh',
+  },
+};
+
+function getLang() {
+  try {
+    const l = sessionStorage.getItem('lang');
+    return l === 'en' || l === 'ko' ? l : 'ko';
+  } catch {
+    return 'ko';
+  }
+}
+
+function extractErrorInfo(error) {
+  if (isRouteErrorResponse(error)) {
+    const title = error.statusText || `Error ${error.status}`;
+    const details = error.data?.message || error.data || '';
+    return { title, details: String(details), componentName: null, stack: '' };
+  }
+
+  const stack = error?.stack || '';
+  const match = stack.match(/at\s+(\w+)\s+\(eval/);
+  let componentName = match?.[1] ?? null;
+  if (componentName === 'eval') componentName = null;
+
+  const title = componentName
+    ? `in ${componentName}: ${error}`
+    : String(error);
+
+  return { title, details: String(error), componentName, stack };
+}
 
 /**
  * Error boundary component specifically for React Router.
- * This catches errors thrown within route components and displays
- * a user-friendly error page instead of the default error overlay.
+ * Used as `errorElement` in route config — catches errors thrown
+ * within route components and displays a user-friendly fallback.
+ *
+ * UI matches ErrorOverlay & GlobalErrorFallback.
  */
 function RouterErrorBoundary() {
   const error = useRouteError();
-
-  // Determine error message based on error type
-  let errorMessage = "An unexpected error occurred.";
-  let errorDetails = null;
-
-  if (isRouteErrorResponse(error)) {
-    // This is a response error (like 404, 500, etc.)
-    errorMessage = error.statusText || `Error ${error.status}`;
-    errorDetails = error.data?.message || error.data;
-  } else if (error instanceof Error) {
-    errorMessage = error.message;
-    errorDetails = import.meta.env.DEV ? error.stack : null;
-  } else if (typeof error === "string") {
-    errorMessage = error;
-  }
-
-  const lang = sessionStorage.getItem("lang") || "ko";
-
-  const title = {
-    ko: "일부 오류가 발생하였습니다.",
-    en: "Some errors"
-  };
-
-  const description = {
-    ko: "실패한 업데이트를 다시 시도하고 있습니다. 잠시만 기다려 주세요.",
-    en: "We’re retrying the failed update. Please wait a moment.",
-  };
+  const lang = getLang();
+  const t = TRANSLATIONS[lang] ?? TRANSLATIONS.ko;
 
   useEffect(() => {
-    window.parent?.postMessage(
-      {
-        type: "sync_tax_error",
-        data: "true",
-      },
-      "*",
-    );
-  }, []);
+    try {
+      const { title, details, componentName } = extractErrorInfo(error);
+
+      window.parent?.postMessage(
+        { type: 'sync_tax_error', data: 'true' },
+        '*',
+      );
+      window.parent?.postMessage(
+        {
+          type: 'app_error',
+          error: { title, details, componentName, originalError: error },
+        },
+        '*',
+      );
+    } catch {
+      // silent
+    }
+  }, [error]);
 
   return (
     <div className="min-h-screen bg-[#faf9f7] flex items-center justify-center px-4">
-      <div className="absolute inset-0 z-10 flex items-center justify-center bg-white">
-        <div className="text-center flex flex-col items-center gap-6">
-          {/* Spinner ring with logo */}
-          <div className="relative w-20 h-20">
-            <div
-              className="absolute inset-0 rounded-full"
-              style={{
-                background: 'conic-gradient(from 0deg, transparent 0%, transparent 30%, #6366f1 70%, #a855f7 100%)',
-                WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px))',
-                mask: 'radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px))',
-                animation: 'spin 1s linear infinite',
-              }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <img src="https://cdn.vibe-x.app/assets/vibexLogo.png" alt="" className="w-12 h-auto object-contain" />
-            </div>
-          </div>
-
-          {/* Text */}
-          <div className="min-h-[60px]">
-            <p
-              className="text-lg font-semibold text-gray-800 tracking-tight transition-opacity duration-200"
-            >
-              {title[lang] || title.ko}
-            </p>
-            <p
-              className="text-[15px] text-gray-400 mt-1.5 transition-opacity duration-200" >
-              {description[lang] || description.ko}
-            </p>
-          </div>
-
-          {/* Animated progress dots */}
-          <div className="flex items-center gap-2">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-2 h-2 rounded-full bg-indigo-400"
-                style={{
-                  animation: 'pulse 1.4s ease-in-out infinite',
-                  animationDelay: `${i * 0.2}s`,
-                }}
-              />
-            ))}
-          </div>
+      <div className="max-w-md w-full text-center">
+        <div className="w-20 h-20 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
+          <AlertTriangle className="w-10 h-10 text-red-500" />
         </div>
+
+        <h1 className="text-3xl text-[#0a0a0a] mb-4">{t.title}</h1>
+
+        <p className="text-gray-600 mb-8 leading-relaxed">{t.desc}</p>
+
+        <button
+          onClick={() => window.location.reload()}
+          className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-[#0a0a0a] text-white text-sm font-medium tracking-wider uppercase rounded-lg hover:bg-[#1a1a1a] transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          {t.refresh}
+        </button>
       </div>
     </div>
   );

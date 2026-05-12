@@ -15,13 +15,11 @@ import {
   useNavigationType,
   useLocation,
 } from "react-router-dom";
-import { setupIframeMessaging } from "./lib/iframe-messaging";
 import PageNotFound from "./lib/PageNotFound";
 import { AuthProvider } from "./lib/AuthProvider";
 import { useAuth } from "./lib/useAuth";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import Login from "./pages/admin/Login";
-import IframeHeartbeat from "./lib/IframeHeartbeat";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 import DefaultHome from "./pages/Home";
@@ -34,9 +32,7 @@ const mainPageKey = mainPage ?? Object.keys(Pages)[0] ?? 'Home';
 const MainPage = Pages[mainPageKey] ?? DefaultHome;
 
 const adminMainPageKey = adminMainPage ?? Object.keys(Admins)[0];
-const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : <></>;
-
-setupIframeMessaging();
+const AdminMainPage = adminMainPageKey ? Admins[adminMainPageKey] : () => <></>;
 
 const LayoutWrapper = ({ children, currentPageName }) =>
   Layout ? <Layout currentPageName={currentPageName}>{children}</Layout> : <></>;

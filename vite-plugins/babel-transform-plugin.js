@@ -3,6 +3,7 @@ import { default as traverse } from '@babel/traverse';
 import { default as generate } from '@babel/generator';
 import * as t from '@babel/types';
 import crypto from 'crypto';
+import fs from 'fs';
 
 // Simple LRU cache to avoid re-parsing unchanged files
 const transformCache = new Map();
@@ -95,6 +96,14 @@ function checkIfElementHasDynamicContent(jsxElement) {
 			} else if (value && typeof value === 'object' && value.type) {
 				traverseNode(value);
 			}
+		});
+	}
+
+	// Check attributes of the JSX element
+	if (jsxElement.openingElement && jsxElement.openingElement.attributes) {
+		jsxElement.openingElement.attributes.forEach(attr => {
+			if (hasDynamicContent) return;
+			traverseNode(attr);
 		});
 	}
 
@@ -231,7 +240,45 @@ export function babelTransformPlugin() {
 			}
 
 			try {
-				// Parse the code into an AST
+				// Parse the ORIGINAL source file from disk to get correct line numbers.
+				// The `code` parameter may have been modified by @vitejs/plugin-react
+				// (HMR preamble, import rewrites, hook wrappers) which shifts line numbers.
+				let originalLineMap = null;
+				try {
+					const originalCode = fs.readFileSync(id, 'utf-8');
+					const originalAst = parse(originalCode, {
+						sourceType: 'module',
+						plugins: [
+							'jsx', 'typescript', 'decorators-legacy', 'classProperties',
+							'objectRestSpread', 'functionBind', 'exportDefaultFrom',
+							'exportNamespaceFrom', 'dynamicImport', 'nullishCoalescingOperator',
+							'optionalChaining', 'asyncGenerators', 'bigInt',
+							'optionalCatchBinding', 'throwExpressions'
+						],
+					});
+					// Build ordered list of original JSX element positions (line:column)
+					originalLineMap = [];
+					traverse.default(originalAst, {
+						JSXElement(path) {
+							const el = path.node.openingElement;
+							if (t.isJSXFragment(path.node)) return;
+							if (t.isJSXIdentifier(el.name)) {
+								const tagName = el.name.name;
+								if (tagName[0] === tagName[0].toLowerCase() && !isHtmlOrSvgElement(tagName)) return;
+							}
+							const hasLoc = el.attributes.some(attr =>
+								t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === 'data-source-location'
+							);
+							if (hasLoc) return;
+							const { line, column } = el.loc?.start || { line: 1, column: 0 };
+							originalLineMap.push({ line, column });
+						}
+					});
+				} catch (e) {
+					// If we can't read/parse the original file, fall back to using transformed code positions
+				}
+
+				// Parse the transformed code into an AST
 				const ast = parse(code, {
 					sourceType: 'module',
 					plugins: [
@@ -255,6 +302,7 @@ export function babelTransformPlugin() {
 
 				// Traverse the AST and add source location and dynamic content attributes to JSX elements
 				let elementsProcessed = 0;
+				let elementIndex = 0;
 				traverse.default(ast, {
 					JSXElement(path) {
 						const jsxElement = path.node;
@@ -281,8 +329,17 @@ export function babelTransformPlugin() {
 
 						if (hasSourceLocation) return;
 
-						// Get line and column from AST node location
-						const { line, column } = openingElement.loc?.start || { line: 1, column: 0 };
+						// Use original file line numbers if available, otherwise fall back to transformed code positions
+						let line, column;
+						if (originalLineMap && elementIndex < originalLineMap.length) {
+							line = originalLineMap[elementIndex].line;
+							column = originalLineMap[elementIndex].column;
+						} else {
+							const loc = openingElement.loc?.start || { line: 1, column: 0 };
+							line = loc.line;
+							column = loc.column;
+						}
+						elementIndex++;
 
 						// Create the source location attribute
 						const sourceLocationAttr = t.jsxAttribute(
