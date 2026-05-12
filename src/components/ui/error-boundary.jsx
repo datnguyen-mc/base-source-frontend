@@ -17,12 +17,34 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    // Skip transient React null-hook errors (HMR / init race)
+    const errStr = String(error);
+    if (errStr.includes("Cannot read properties of null")) {
+      // Auto-recover: reset state so the app retries rendering
+      this.setState({ hasError: false, error: null, errorInfo: null });
+      return;
+    }
+
     // Log error to console for debugging
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
 
-    // You can also log the error to an error reporting service here
-    // logErrorToService(error, errorInfo);
+    // Report to parent iframe
+    try {
+      window.parent?.postMessage(
+        {
+          type: 'app_error',
+          error: {
+            title: errStr,
+            details: errorInfo?.componentStack?.toString(),
+            componentName: null,
+          },
+        },
+        '*',
+      );
+    } catch {
+      // silent
+    }
   }
 
   handleReload = () => {

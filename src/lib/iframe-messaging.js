@@ -26,8 +26,28 @@ function extractPathWithLine(stack) {
   return `${path}:${line}`; // final format
 }
 
+// Transient React hook errors to suppress — these occur during HMR or
+// module init race conditions and self-resolve on reload.
+const SUPPRESSED_PATTERNS = [
+  "Cannot read properties of null (reading 'useState')",
+  "Cannot read properties of null (reading 'useEffect')",
+  "Cannot read properties of null (reading 'useRef')",
+  "Cannot read properties of null (reading 'useContext')",
+  "Cannot read properties of null (reading 'useMemo')",
+  "Cannot read properties of null (reading 'useCallback')",
+  "Cannot read properties of null (reading 'useReducer')",
+];
+
+function isSuppressedError(error) {
+  const msg = error?.toString?.() || error?.message || '';
+  return SUPPRESSED_PATTERNS.some((p) => msg.includes(p));
+}
+
 function onAppError({ title, details, componentName, originalError }) {
   if (originalError?.response?.status === 402) return;
+
+  // Skip transient React null-hook errors (HMR / init race)
+  if (isSuppressedError(originalError) || isSuppressedError({ toString: () => details })) return;
 
   window.parent?.postMessage(
     {

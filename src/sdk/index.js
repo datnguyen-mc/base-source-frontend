@@ -130,7 +130,7 @@ function createHttp(cfg) {
     }
 
     // unauthorized → auto redirect
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       console.warn(`[vibexClient SDK] Unauthorized (${res.status})`);
 
       try {

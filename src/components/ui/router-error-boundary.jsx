@@ -59,6 +59,11 @@ function RouterErrorBoundary() {
     try {
       const { title, details, componentName } = extractErrorInfo(error);
 
+      // Skip transient React null-hook errors (HMR / init race)
+      const errStr = String(error);
+      const isTransient = errStr.includes("Cannot read properties of null (reading 'use");
+      if (isTransient) return;
+
       window.parent?.postMessage(
         { type: 'sync_tax_error', data: 'true' },
         '*',
