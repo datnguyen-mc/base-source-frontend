@@ -7,11 +7,11 @@
  */
 
 const DEFAULT_TRANSLATIONS = {
-  en: { placeholder: 'What to change?' },
-  ko: { placeholder: '무엇을 변경하시겠습니까?' },
-  vn: { placeholder: 'Bạn muốn thay đổi gì?' },
-  jp: { placeholder: '何を変更しますか？' },
-  ch: { placeholder: '你想改什么？' },
+  en: { placeholder: 'What to change?', uploadImage: 'Upload Image', tooManyFilesTitle: 'Upload limit reached', tooManyFiles: 'You can upload up to {{max}} files (currently {{current}}). All selected files were cancelled.', fileTooLargeTitle: 'File too large', fileTooLarge: 'Max size: {{maxImage}}. Rejected: {{rejected}}', totalTooLargeTitle: 'Total size exceeded', totalTooLarge: 'Total upload size exceeds {{max}} (current: {{total}})', invalidFileTypeTitle: 'Invalid file type', invalidFileType: 'Only image files (JPG, PNG, GIF, WEBP, SVG) are allowed.' },
+  ko: { placeholder: '무엇을 변경하시겠습니까?', uploadImage: '이미지 업로드', tooManyFilesTitle: '업로드 한도 초과', tooManyFiles: '최대 {{max}}개 파일까지 업로드할 수 있습니다 (현재 {{current}}개). 선택한 파일이 모두 취소되었습니다.', fileTooLargeTitle: '파일 크기 초과', fileTooLarge: '최대 크기: {{maxImage}}. 거부됨: {{rejected}}', totalTooLargeTitle: '총 크기 초과', totalTooLarge: '총 업로드 크기가 {{max}}을 초과합니다 (현재: {{total}})', invalidFileTypeTitle: '지원하지 않는 파일 형식', invalidFileType: '이미지 파일(JPG, PNG, GIF, WEBP, SVG)만 업로드할 수 있습니다.' },
+  vn: { placeholder: 'Bạn muốn thay đổi gì?', uploadImage: 'Tải ảnh lên', tooManyFilesTitle: 'Vượt quá giới hạn tải lên', tooManyFiles: 'Bạn có thể tải lên tối đa {{max}} tệp (hiện tại {{current}}). Đã hủy tất cả tệp được chọn.', fileTooLargeTitle: 'Tệp quá lớn', fileTooLarge: 'Kích thước tối đa: {{maxImage}}. Bị từ chối: {{rejected}}', totalTooLargeTitle: 'Vượt quá tổng dung lượng', totalTooLarge: 'Tổng dung lượng vượt quá {{max}} (hiện tại: {{total}})', invalidFileTypeTitle: 'Loại tệp không hợp lệ', invalidFileType: 'Chỉ hỗ trợ tệp hình ảnh (JPG, PNG, GIF, WEBP, SVG).' },
+  jp: { placeholder: '何を変更しますか？', uploadImage: '画像をアップロード', tooManyFilesTitle: 'アップロード上限に達しました', tooManyFiles: '最大 {{max}} 個のファイルをアップロードできます（現在 {{current}} 個）。すべての選択がキャンセルされました。', fileTooLargeTitle: 'ファイルが大きすぎます', fileTooLarge: '最大サイズ: {{maxImage}}。拒否: {{rejected}}', totalTooLargeTitle: '合計サイズ超過', totalTooLarge: '合計アップロードサイズが {{max}} を超えています（現在: {{total}}）', invalidFileTypeTitle: '無効なファイル形式', invalidFileType: '画像ファイル（JPG、PNG、GIF、WEBP、SVG）のみ許可されています。' },
+  ch: { placeholder: '你想改什么？', uploadImage: '上传图片', tooManyFilesTitle: '上传达到上限', tooManyFiles: '最多允许上传 {{max}} 个文件（当前 {{current}}）。已取消所有选择。', fileTooLargeTitle: '文件过大', fileTooLarge: '最大大小: {{maxImage}}。被拒绝: {{rejected}}', totalTooLargeTitle: '总大小超过限制', totalTooLarge: '总上传大小超过 {{max}}（当前: {{total}}）', invalidFileTypeTitle: '文件类型无效', invalidFileType: '仅允许使用图像文件（JPG、PNG、GIF、WEBP、SVG）。' },
 };
 
 const DEFAULT_OPTIONS = {
@@ -63,6 +63,152 @@ function generateClientScript(config) {
   
   let aH=[],aL=[],cL=null,sL=null,sH=[],sLb=[],aF=null,cE=null,iS=false,aSB=null,sT=null,mH=null,init=false,cEIdx=null,hE=null,inputDisabled=CONFIG.defaultInputDisabled;
   
+  function showToast(title, msg) {
+    let tc = document.getElementById('ve-toast-container');
+    if (!tc) {
+      tc = document.createElement('div');
+      tc.id = 've-toast-container';
+      tc.style.cssText = 'position:fixed;top:24px;right:24px;z-index:2147483647;display:flex;flex-direction:column;gap:16px;max-width:448px;width:calc(100vw - 32px);';
+      document.body.appendChild(tc);
+      
+      const s = document.createElement('style');
+      s.textContent = '@keyframes ve-toast-in{from{transform:translateY(-20px) scale(0.95);opacity:0}to{transform:translateY(0) scale(1);opacity:1}} @keyframes ve-toast-out{from{transform:translateY(0) scale(1);opacity:1}to{transform:translateY(-20px) scale(0.95);opacity:0}}';
+      document.head.appendChild(s);
+    }
+    
+    const t = document.createElement('div');
+    t.style.cssText = 'background:linear-gradient(to bottom right, #fef2f2, #fdf2f8);border:2px solid #fecaca;border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);padding:20px;backdrop-filter:blur(24px);font-family:-apple-system,sans-serif;animation:ve-toast-in 0.2s ease-out forwards;position:relative;';
+    
+    const flexCont = document.createElement('div');
+    flexCont.style.cssText = 'display:flex;align-items:flex-start;gap:16px;';
+    
+    const iconCont = document.createElement('div');
+    iconCont.style.cssText = 'flex-shrink:0;width:40px;height:40px;background:linear-gradient(to bottom right, #ef4444, #ec4899);border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);';
+    iconCont.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>';
+    flexCont.appendChild(iconCont);
+    
+    const textCont = document.createElement('div');
+    textCont.style.cssText = 'flex:1;min-width:0;';
+    
+    if (title) {
+      const h = document.createElement('h3');
+      h.style.cssText = 'font-weight:700;font-size:16px;color:#111827;margin:0 0 4px 0;';
+      h.textContent = title;
+      textCont.appendChild(h);
+    }
+    
+    const b = document.createElement('p');
+    b.style.cssText = 'font-size:14px;color:#4b5563;line-height:1.625;margin:0;word-break:break-word;';
+    b.innerHTML = msg.replace(/\\n/g, '<br/>');
+    textCont.appendChild(b);
+    
+    flexCont.appendChild(textCont);
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.style.cssText = 'position:relative;z-index:10;flex-shrink:0;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background-color 0.2s;cursor:pointer;border:none;background:transparent;padding:0;';
+    closeBtn.onmouseenter = () => closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
+    closeBtn.onmouseleave = () => closeBtn.style.background = 'transparent';
+    closeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+    flexCont.appendChild(closeBtn);
+    
+    t.appendChild(flexCont);
+    tc.appendChild(t);
+    
+    const removeToast = () => {
+      t.style.animation = 've-toast-out 0.2s ease-in forwards';
+      setTimeout(() => { t.remove(); if(tc.childNodes.length === 0) tc.remove(); }, 200);
+    };
+    
+    closeBtn.onclick = (e) => { e.stopPropagation(); removeToast(); };
+    setTimeout(removeToast, 4000);
+  }
+
+  
+  const UPLOAD_LIMITS = {
+    IMAGE_MAX: 5 * 1024 * 1024,   // 5 MB per image
+    FILE_MAX: 20 * 1024 * 1024,   // 20 MB per non-image file
+    TOTAL_MAX: 50 * 1024 * 1024,  // 50 MB total size
+    MAX_COUNT: 10,                // max 10 items total
+  };
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return \`\${bytes}B\`;
+    if (bytes < 1024 * 1024) return \`\${(bytes / 1024).toFixed(0)}KB\`;
+    return \`\${(bytes / (1024 * 1024)).toFixed(1)}MB\`;
+  }
+
+  function validateUploadFiles(files, options = {}) {
+    const imageMax = options.imageMax ?? UPLOAD_LIMITS.IMAGE_MAX;
+    const fileMax = options.fileMax ?? UPLOAD_LIMITS.FILE_MAX;
+    const totalMax = options.totalMax ?? UPLOAD_LIMITS.TOTAL_MAX;
+    const maxCount = options.maxCount ?? UPLOAD_LIMITS.MAX_COUNT;
+    const currentCount = options.currentCount ?? 0;
+
+    const errors = [];
+    let candidateFiles = [...files];
+
+    const remaining = Math.max(0, maxCount - currentCount);
+    if (candidateFiles.length > remaining) {
+      const excess = candidateFiles.length - remaining;
+      errors.push({
+        key: "upload.tooManyFiles",
+        params: { max: maxCount, current: currentCount, excess },
+      });
+      candidateFiles = [];
+    }
+
+    const validTypes = [];
+    let hasInvalidType = false;
+    for (const file of candidateFiles) {
+      if (file.type.startsWith('image/')) {
+        validTypes.push(file);
+      } else {
+        hasInvalidType = true;
+      }
+    }
+    if (hasInvalidType) {
+      errors.push({ key: "upload.invalidFileType", params: {} });
+    }
+    candidateFiles = validTypes;
+
+    const validFiles = [];
+    const rejectedNames = [];
+
+    for (const file of candidateFiles) {
+      if (file.size > imageMax) {
+        rejectedNames.push(\`\${file.name} (\${formatFileSize(file.size)})\`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (rejectedNames.length > 0) {
+      errors.push({
+        key: "upload.fileTooLarge",
+        params: {
+          maxImage: formatFileSize(imageMax),
+          rejected: rejectedNames.join(", "),
+        },
+      });
+    }
+
+    if (validFiles.length > 0) {
+      const totalSize = validFiles.reduce((sum, f) => sum + f.size, 0);
+      if (totalSize > totalMax) {
+        errors.push({
+          key: "upload.totalTooLarge",
+          params: {
+            max: formatFileSize(totalMax),
+            total: formatFileSize(totalSize),
+          },
+        });
+        validFiles.length = 0;
+      }
+    }
+
+    return { validFiles, errors };
+  }
+  
   function cHl(el,sel=false){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY,c=sel?SC:HC;
     const h=document.createElement('div');
@@ -101,11 +247,12 @@ function generateClientScript(config) {
   function clrH(){aH.forEach(h=>h.remove());aL.forEach(l=>l.remove());aH=[];aL=[];cL=null}
   function clrAll(){clsF();clrH()}
   
-  function sub(v){
+  function sub(v, files = []){
     const idx = CONFIG.multiSelectSameLocation ? null : cEIdx;
     const dynContent = cE?.getAttribute(ATTR_DYN) || null;
     const elContent=cE?cE?.innerText?.trim():null;
     const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent,elementContent:elContent};
+    if (files && files.length > 0) d.files = files;
     setL(true);clnL();
     if(isIF()){
       try{
@@ -120,24 +267,188 @@ function generateClientScript(config) {
   function cIF(el){
     const r=el.getBoundingClientRect(),sx=scrollX,sy=scrollY;
     const f=document.createElement('div');f.className='ve-f';
-    f.style.cssText=\`position:absolute;top:\${r.bottom+sy+8}px;left:\${r.left+sx}px;min-width:300px;max-width:400px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.05);z-index:100001;display:flex;align-items:center;padding:8px 12px;gap:8px;font-family:-apple-system,sans-serif\`;
-    const bb=document.createElement('button');bb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>';
-    bb.style.cssText='background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;display:flex;border-radius:4px';bb.onclick=clsF;
+    f.style.cssText=\`position:absolute;top:\${r.bottom+sy+8}px;left:\${r.left+sx}px;min-width:320px;max-width:320px;background:#fff;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15),0 0 0 1px rgba(0,0,0,.05);z-index:100001;display:flex;align-items:center;padding:8px 12px;gap:8px;display:flex;flex-direction:column;align-items:stretch;font-family:-apple-system,sans-serif\`;
+    
+    const pcList = document.createElement('div');
+    pcList.className = 've-pclist';
+    pcList.style.cssText = 'display:none;gap:8px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid #f3f4f6;margin-bottom:2px';
+    
+    const ir = document.createElement('div');
+    ir.style.cssText = 'display:flex;align-items:center;gap:6px;width:100%';
+    
+    const bb=document.createElement('button');bb.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>';
+    bb.style.cssText='background:transparent;border:none;cursor:pointer;padding:6px;color:#6b7280;display:flex;border-radius:6px;transition:all 0.2s';
+    bb.onmouseenter = () => { bb.style.background = '#f3f4f6'; bb.style.color = '#374151'; };
+    bb.onmouseleave = () => { bb.style.background = 'transparent'; bb.style.color = '#6b7280'; };
+    bb.onclick=clsF;
+    
+    let selectedFiles = [];
+    
+    const handleFiles = (newFiles) => {
+      if (newFiles.length === 0) return;
+      const { validFiles, errors } = validateUploadFiles(newFiles, { currentCount: selectedFiles.length });
+      if (errors.length > 0) {
+        const t = CONFIG.translations[CONFIG.language] || CONFIG.translations['en'];
+        errors.forEach(e => {
+          let title = '';
+          let msg = '';
+          if (e.key === 'upload.tooManyFiles') {
+             title = t.tooManyFilesTitle || 'Upload limit reached';
+             msg = (t.tooManyFiles || 'Too many files (max {{max}}).').replace('{{max}}', e.params.max).replace('{{current}}', e.params.current);
+          }
+          if (e.key === 'upload.fileTooLarge') {
+             title = t.fileTooLargeTitle || 'File too large';
+             msg = (t.fileTooLarge || 'Files too large: {{rejected}}.').replace('{{rejected}}', e.params.rejected).replace('{{maxImage}}', e.params.maxImage);
+          }
+          if (e.key === 'upload.totalTooLarge') {
+             title = t.totalTooLargeTitle || 'Total size exceeded';
+             msg = (t.totalTooLarge || 'Total size too large (max {{max}}).').replace('{{max}}', e.params.max).replace('{{total}}', e.params.total);
+          }
+          if (e.key === 'upload.invalidFileType') {
+             title = t.invalidFileTypeTitle || 'Invalid file type';
+             msg = t.invalidFileType || 'Invalid file type.';
+          }
+          showToast(title, msg);
+        });
+      }
+      if (validFiles.length > 0) {
+        selectedFiles = [...selectedFiles, ...validFiles];
+        renderPreviews();
+        upd();
+      }
+    };
+    
+    const ab=document.createElement('button');ab.className='ve-ab';ab.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+    ab.style.cssText='background:transparent;border:none;cursor:pointer;padding:6px;color:#6b7280;display:flex;border-radius:6px;transition:all 0.2s';
+    ab.onmouseenter = () => { if(!iS && !inputDisabled) { ab.style.background = '#f3f4f6'; ab.style.color = '#374151'; } };
+    ab.onmouseleave = () => { if(!iS && !inputDisabled) { ab.style.background = 'transparent'; ab.style.color = '#6b7280'; } };
+    
+    const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.multiple=true;fi.style.display='none';
+    ab.onclick = () => { if(!iS && !inputDisabled) fi.click(); };
+    
     const t = CONFIG.translations[CONFIG.language] || CONFIG.translations['en'];
+    if (t.uploadImage) ab.title = t.uploadImage;
     const ip=document.createElement('input');ip.type='text';ip.placeholder=t.placeholder;
-    ip.style.cssText='flex:1;border:none;outline:none;font-size:14px;color:#374151;background:transparent';
+    ip.style.cssText='flex:1;border:none;outline:none;font-size:14px;color:#374151;background:transparent;min-width:0';
     const sb=document.createElement('button');
     sb.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>';
-    sb.disabled=true;sb.style.cssText=\`background:\${SB};opacity:0.5;border:none;cursor:not-allowed;padding:6px;color:white;display:flex;border-radius:6px\`;
+    sb.disabled=true;
+    sb.style.cssText=\`background:\${SB};opacity:0.5;border:none;cursor:not-allowed;padding:8px;color:white;display:flex;border-radius:8px;transition:all 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.1)\`;
     aSB=sb;
-    const upd=()=>{if(iS||inputDisabled)return;const h=ip.value.trim().length>0;sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed'};
-    ip.oninput=upd;ip.onkeydown=(e)=>{if(e.key==='Enter'&&ip.value.trim()&&!iS&&!inputDisabled)sub(ip.value.trim());else if(e.key==='Escape')clsF()};
-    sb.onclick=()=>{if(ip.value.trim()&&!iS&&!inputDisabled)sub(ip.value.trim())};
+    
+    const upd=()=>{
+      if(iS||inputDisabled)return;
+      const h=ip.value.trim().length>0;
+      sb.disabled=!h;sb.style.background=SB;sb.style.opacity=h?'1':'0.5';sb.style.cursor=h?'pointer':'not-allowed';
+      if(h) {
+        sb.style.transform = 'translateY(-1px)';
+        sb.style.boxShadow = '0 4px 6px rgba(0,0,0,0.15)';
+      } else {
+        sb.style.transform = 'none';
+        sb.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+      }
+    };
+    
+    const renderPreviews = () => {
+      pcList.innerHTML = '';
+      if(selectedFiles.length === 0) {
+        pcList.style.display = 'none';
+      } else {
+        pcList.style.display = 'flex';
+        selectedFiles.forEach((file, index) => {
+          const pc = document.createElement('div');
+          pc.style.cssText = 'position:relative;align-items:center;justify-content:center;width:44px;height:44px;border-radius:6px;border:1px solid #e5e7eb;overflow:hidden;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,0.05)';
+          const pcImg = document.createElement('img');
+          pcImg.style.cssText = 'width:100%;height:100%;object-fit:cover';
+          pcImg.src = URL.createObjectURL(file);
+          pc.append(pcImg);
+          const pcBtn = document.createElement('button');
+          pcBtn.className = 've-pc-btn';
+          pcBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+          pcBtn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.5);border:none;cursor:pointer;padding:3px;color:#fff;display:flex;border-radius:4px;transition:background 0.2s;backdrop-filter:blur(2px)';
+          
+          pcBtn.onmouseenter = () => { if(!iS && !inputDisabled) pcBtn.style.background = 'rgba(0,0,0,0.8)'; };
+          pcBtn.onmouseleave = () => { if(!iS && !inputDisabled) pcBtn.style.background = 'rgba(0,0,0,0.5)'; };
+          
+          pcBtn.onclick = () => {
+            if(iS || inputDisabled) return;
+            selectedFiles.splice(index, 1);
+            URL.revokeObjectURL(pc.querySelector('img').src);
+            renderPreviews();
+            upd();
+          };
+          
+          pc.append(pcBtn);
+          pcList.append(pc);
+        });
+      }
+      if(inputDisabled) {
+        const btns = pcList.querySelectorAll('.ve-pc-btn');
+        btns.forEach(btn => {
+          btn.disabled = true;
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+        });
+      }
+    };
+    
+    ip.oninput=upd;
+    ip.onkeydown=(e)=>{if(e.key==='Enter'&&(ip.value.trim().length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles);else if(e.key==='Escape')clsF()};
+    sb.onclick=()=>{if((ip.value.trim().length>0)&&!iS&&!inputDisabled)sub(ip.value.trim(), selectedFiles)};
+    
+    fi.onchange = (e) => {
+      const newFiles = Array.from(e.target.files);
+      if(newFiles.length > 0) {
+        handleFiles(newFiles);
+      }
+      fi.value = '';
+    };
+    
     const cb=document.createElement('button');cb.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
     cb.style.cssText='background:none;border:none;cursor:pointer;padding:4px;color:#6b7280;display:flex;border-radius:4px';cb.onclick=clsF;
     const dv=document.createElement('div');dv.style.cssText='width:1px;background:#e5e7eb;height:24px;margin-left:5px';
-    f.append(bb,ip,sb,dv,cb);document.body.appendChild(f);aF=f;
+    
+    ir.append(bb,ip,ab,fi,sb,dv,cb);
+    f.append(pcList, ir);
+    document.body.appendChild(f);aF=f;
     f.addEventListener('mouseenter',clrH);f.addEventListener('click',e=>e.stopPropagation());
+    
+    f.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (!inputDisabled && !iS) {
+        f.style.borderColor = SB;
+        f.style.background = '#f9fafb';
+      }
+    });
+    f.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      f.style.borderColor = '#f3f4f6';
+      f.style.background = '#fff';
+    });
+    f.addEventListener('drop', (e) => {
+      e.preventDefault();
+      f.style.borderColor = '#f3f4f6';
+      f.style.background = '#fff';
+      if (inputDisabled || iS) return;
+      const newFiles = Array.from(e.dataTransfer.files);
+      if (newFiles.length > 0) {
+        handleFiles(newFiles);
+      }
+    });
+    f.addEventListener('paste', (e) => {
+      if (inputDisabled || iS) return;
+      const items = (e.clipboardData || window.clipboardData).items;
+      const newFiles = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file') {
+          newFiles.push(items[i].getAsFile());
+        }
+      }
+      if (newFiles.length > 0) {
+        e.preventDefault();
+        handleFiles(newFiles);
+      }
+    });
     setTimeout(()=>ip.focus(),50);
     const fr=f.getBoundingClientRect();
     if(fr.right>innerWidth)f.style.left=\`\${innerWidth-fr.width-16}px\`;
@@ -145,6 +456,7 @@ function generateClientScript(config) {
     if(inputDisabled){
       ip.disabled=true;ip.style.opacity='0.5';ip.style.cursor='not-allowed';
       sb.disabled=true;sb.style.opacity='0.5';sb.style.cursor='not-allowed';
+      ab.disabled=true;ab.style.opacity='0.5';ab.style.cursor='not-allowed';
     }
   }
   
@@ -209,6 +521,8 @@ function generateClientScript(config) {
       const t = CONFIG.translations[lang];
       const ip = aF.querySelector('input');
       if (ip) ip.placeholder = t.placeholder;
+      const ab = aF.querySelector('.ve-ab');
+      if (ab && t.uploadImage) ab.title = t.uploadImage;
     }
   }
   
@@ -243,15 +557,25 @@ function generateClientScript(config) {
   
   function setInputDisabled(disabled) {
     inputDisabled = !!disabled;
-    if (!aF) {
-      return;
-    }
-    const ip = aF.querySelector('input');
+    if (!aF) return;
+    const ip = aF.querySelector('input[type="text"]');
     if (ip) {
       ip.disabled = !!disabled;
       ip.style.opacity = disabled ? '0.5' : '1';
       ip.style.cursor = disabled ? 'not-allowed' : 'text';
     }
+    const ab = aF.querySelector('.ve-ab');
+    if (ab) {
+      ab.disabled = !!disabled;
+      ab.style.opacity = disabled ? '0.5' : '1';
+      ab.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    }
+    const pcBtns = aF.querySelectorAll('.ve-pc-btn');
+    pcBtns.forEach(btn => {
+      btn.disabled = !!disabled;
+      btn.style.opacity = disabled ? '0.5' : '1';
+      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    });
     if (aSB) {
       if (disabled) {
         aSB.disabled = true;
