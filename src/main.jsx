@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import 'leaflet/dist/leaflet.css';
 import '@/index.css'
+import { setupIframeMessaging } from '@/lib/iframe-messaging';
+
+// Install global error → postMessage handlers (must run before render)
+setupIframeMessaging();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <App />
