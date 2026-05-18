@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
       watch: {
         usePolling: true,
         interval: 1000,
-        binaryInterval: 3000,
+        binaryInterval: 2000,
         ignored: [
           "**/node_modules/**",
           "**/.git/**",
@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
         ],
         awaitWriteFinish: {
           stabilityThreshold: 800,
-          pollInterval: 200
+          pollInterval: 1000
         }
       },
       headers: {
