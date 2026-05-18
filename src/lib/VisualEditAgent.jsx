@@ -235,6 +235,7 @@ export default function VisualEditAgent() {
 			content: element.innerText,
 			dataSourceLocation: element.dataset.sourceLocation,
 			isDynamicContent: element.dataset.dynamicContent === 'true',
+			dynamicSource: element.dataset.dynamicSource || '',
 			linenumber: element.dataset.linenumber, // Keep for backward compatibility
 			filename: element.dataset.filename, // Keep for backward compatibility
 			position: elementPosition // Add position data for popover
