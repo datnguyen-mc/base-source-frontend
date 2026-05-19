@@ -90,10 +90,12 @@ function checkIfElementHasDynamicContent(jsxElement) {
 			if (Array.isArray(value)) {
 				value.forEach(child => {
 					if (child && typeof child === 'object' && child.type) {
+						if (t.isJSXElement(child) || t.isJSXFragment(child)) return;
 						traverseNode(child);
 					}
 				});
 			} else if (value && typeof value === 'object' && value.type) {
+				if (t.isJSXElement(value) || t.isJSXFragment(value)) return;
 				traverseNode(value);
 			}
 		});
@@ -110,6 +112,7 @@ function checkIfElementHasDynamicContent(jsxElement) {
 	// Check all children of the JSX element
 	jsxElement.children.forEach(child => {
 		if (hasDynamicContent) return; // Early exit if already found dynamic content
+		if (t.isJSXElement(child) || t.isJSXFragment(child)) return; // DO NOT traverse into nested elements
 		traverseNode(child);
 	});
 
