@@ -226,6 +226,17 @@ export default function VisualEditAgent() {
 			centerY: rect.top + rect.height / 2
 		};
 
+		let parent = null;
+		let codeSnippet = null;
+		try {
+			parent = element.parentElement ? element.parentElement.cloneNode(false).outerHTML.replace('></', '>... (children hidden)</') : null;
+		} catch (err) {}
+		try {
+			codeSnippet = element.outerHTML.length > 2000
+				? element.cloneNode(false).outerHTML.replace('></', '>... (children hidden)</')
+				: element.outerHTML;
+		} catch (err) {}
+
 		// Send message to parent window with element info including position
 		const elementData = {
 			type: 'element-selected',
@@ -238,7 +249,9 @@ export default function VisualEditAgent() {
 			dynamicSource: element.dataset.dynamicSource || '',
 			linenumber: element.dataset.linenumber, // Keep for backward compatibility
 			filename: element.dataset.filename, // Keep for backward compatibility
-			position: elementPosition // Add position data for popover
+			position: elementPosition, // Add position data for popover
+			parent: parent,
+			codeSnippet: codeSnippet
 		};
 		window.parent.postMessage(elementData, '*');
 	};

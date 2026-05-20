@@ -251,7 +251,19 @@ function generateClientScript(config) {
     const idx = CONFIG.multiSelectSameLocation ? null : cEIdx;
     const dynContent = cE?.getAttribute(ATTR_DYN) || null;
     const elContent=cE?cE?.innerText?.trim():null;
-    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent,elementContent:elContent};
+    let parent = null;
+    let codeSnippet = null;
+    if (cE) {
+      try {
+        parent = cE.parentElement ? cE.parentElement.cloneNode(false).outerHTML.replace('></', '>... (children hidden)</') : null;
+      } catch (e) {}
+      try {
+        codeSnippet = cE.outerHTML.length > 2000
+          ? cE.cloneNode(false).outerHTML.replace('></', '>... (children hidden)</')
+          : cE.outerHTML;
+      } catch (e) {}
+    }
+    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent,elementContent:elContent,parent:parent,codeSnippet:codeSnippet};
     if (files && files.length > 0) d.files = files;
     setL(true);clnL();
     if(isIF()){
