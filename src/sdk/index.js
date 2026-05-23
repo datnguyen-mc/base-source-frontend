@@ -497,24 +497,8 @@ function createAuth(http, cfg) {
               const options = args[1] ?? {};
               if (typeof window === "undefined") return;
 
-              // 1. Nhận diện Platform Domain thông minh để redirect Google
-              let platformDomain = "";
-              const currentHost = window.location.hostname;
-              if (currentHost === "localhost" || currentHost.startsWith("192.168.")) {
-                platformDomain = `${window.location.protocol}//${window.location.host}`;
-              } else {
-                const authUrl = cfg.authServerUrl || "";
-                try {
-                  const urlObj = new URL(authUrl);
-                  if (urlObj.hostname.includes("-api.")) {
-                    platformDomain = `${urlObj.protocol}//${urlObj.hostname.replace("-api.", ".")}`;
-                  } else {
-                    platformDomain = `${urlObj.protocol}//${urlObj.hostname}`;
-                  }
-                } catch (e) {
-                  platformDomain = window.location.origin;
-                }
-              }
+              // 1. Nhận diện Platform Domain thông minh để redirect Google (Sử dụng window.location.origin để tự động hỗ trợ localhost, preview và custom domains)
+              const platformDomain = window.location.origin;
 
               // 2. Xử lý Google OAuth
               if (provider === "google") {
