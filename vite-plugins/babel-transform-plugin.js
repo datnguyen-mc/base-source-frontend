@@ -90,10 +90,12 @@ function checkIfElementHasDynamicContent(jsxElement) {
 			if (Array.isArray(value)) {
 				value.forEach(child => {
 					if (child && typeof child === 'object' && child.type) {
+						if (t.isJSXElement(child) || t.isJSXFragment(child)) return;
 						traverseNode(child);
 					}
 				});
 			} else if (value && typeof value === 'object' && value.type) {
+				if (t.isJSXElement(value) || t.isJSXFragment(value)) return;
 				traverseNode(value);
 			}
 		});
@@ -110,6 +112,7 @@ function checkIfElementHasDynamicContent(jsxElement) {
 	// Check all children of the JSX element
 	jsxElement.children.forEach(child => {
 		if (hasDynamicContent) return; // Early exit if already found dynamic content
+		if (t.isJSXElement(child) || t.isJSXFragment(child)) return; // DO NOT traverse into nested elements
 		traverseNode(child);
 	});
 
@@ -356,8 +359,38 @@ export function babelTransformPlugin() {
 							t.stringLiteral(isDynamic ? 'true' : 'false')
 						);
 
-						// Add both attributes to the beginning of the attributes array
-						openingElement.attributes.unshift(sourceLocationAttr, dynamicContentAttr);
+						// Try to find the nearest parent .map() loop to identify the data source
+						let parentMap = path.findParent(p => 
+							t.isCallExpression(p.node) && 
+							t.isMemberExpression(p.node.callee) && 
+							t.isIdentifier(p.node.callee.property, {name: 'map'})
+						);
+						let dynamicSource = '';
+						if (parentMap) {
+							if (t.isIdentifier(parentMap.node.callee.object)) {
+								dynamicSource = parentMap.node.callee.object.name;
+							} else if (t.isMemberExpression(parentMap.node.callee.object)) {
+								let current = parentMap.node.callee.object;
+								let parts = [];
+								while (t.isMemberExpression(current)) {
+									if (t.isIdentifier(current.property)) parts.unshift(current.property.name);
+									current = current.object;
+								}
+								if (t.isIdentifier(current)) parts.unshift(current.name);
+								dynamicSource = parts.join('.');
+							}
+						}
+
+						const attributesToInject = [sourceLocationAttr, dynamicContentAttr];
+						if (dynamicSource) {
+							attributesToInject.push(t.jsxAttribute(
+								t.jsxIdentifier('data-dynamic-source'),
+								t.stringLiteral(dynamicSource)
+							));
+						}
+
+						// Add attributes to the beginning of the attributes array
+						openingElement.attributes.unshift(...attributesToInject);
 						elementsProcessed++;
 					}
 				});

@@ -93,6 +93,20 @@ function createHttp(cfg) {
     return u.toString();
   };
 
+  const getRequestLang = () => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const lang =
+        localStorage.getItem("i18nextLng") ||
+        window.navigator?.languages?.[0] ||
+        window.navigator?.language ||
+        "ko";
+      return lang.split("-")[0];
+    } catch {
+      return "ko";
+    }
+  };
+
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
     const currentToken = typeof window !== "undefined" ? (localStorage.getItem(storageKey) ?? token) : token;
@@ -105,7 +119,7 @@ function createHttp(cfg) {
           ...(init.headers || {}),
           ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
           // Add language header
-          ...(typeof window !== "undefined" ? { "Accept-Language": (localStorage.getItem("i18nextLng") || "ko") === "ko" ? "kr" : "en" } : {}),
+          ...(typeof window !== "undefined" ? { "Accept-Language": getRequestLang() } : {}),
           // Add timezone offset header
           ...(typeof window !== "undefined" ? { "x-timezone-offset": String(-(new Date().getTimezoneOffset())) } : {}),
         },
@@ -130,7 +144,7 @@ function createHttp(cfg) {
     }
 
     // unauthorized → auto redirect
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       console.warn(`[vibexClient SDK] Unauthorized (${res.status})`);
 
       try {
