@@ -11,7 +11,6 @@ export default defineConfig(({ mode }) => {
   const isProduction = env.VITE_APP_ENV === 'production';
 
   return {
-    cacheDir: '/tmp/.vite-cache',
     plugins: [
       react(),
       ...(!isProduction
@@ -35,7 +34,6 @@ export default defineConfig(({ mode }) => {
         : []),
     ].filter(Boolean),
     build: {
-      minify: 'esbuild',
       sourcemap: false,
     },
     server: {
@@ -44,7 +42,7 @@ export default defineConfig(({ mode }) => {
       watch: {
         usePolling: true,
         interval: 1000,
-        binaryInterval: 3000,
+        binaryInterval: 2000,
         ignored: [
           "**/node_modules/**",
           "**/.git/**",
@@ -63,7 +61,7 @@ export default defineConfig(({ mode }) => {
         ],
         awaitWriteFinish: {
           stabilityThreshold: 800,
-          pollInterval: 200
+          pollInterval: 1000
         }
       },
       headers: {
@@ -77,54 +75,6 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
       dedupe: ['react', 'react-dom']
-    },
-    optimizeDeps: {
-  noDiscovery: false,
-  holdUntilCrawlEnd: false,
-  force: true,
-
-  include: [
-    'core-js',
-    'core-js/modules/es.array.reverse.js',
-    'core-js/modules/es.regexp.to-string.js',
-
-    'react',
-    'react-dom',
-    'react-router-dom',
-    'react-hook-form',
-    '@hookform/resolvers',
-    '@tanstack/react-query',
-    'framer-motion',
-    'recharts',
-    'three',
-    'lodash',
-    'moment',
-    'date-fns',
-    'clsx',
-    'class-variance-authority',
-    'tailwind-merge',
-    'zustand',
-    'sonner',
-    'zod',
-    'lucide-react',
-    'react-day-picker',
-    'react-hot-toast',
-    'react-markdown',
-    'cmdk',
-    'canvas-confetti',
-    'html2canvas',
-    'jspdf',
-    'jszip',
-    'swiper',
-    'vaul',
-    'input-otp',
-    'embla-carousel-react',
-    'react-resizable-panels',
-    'react-quill',
-    'react-leaflet',
-    '@hello-pangea/dnd',
-    'next-themes',
-  ],
-},
+    }
   };
 });

@@ -251,7 +251,38 @@ function generateClientScript(config) {
     const idx = CONFIG.multiSelectSameLocation ? null : cEIdx;
     const dynContent = cE?.getAttribute(ATTR_DYN) || null;
     const elContent=cE?cE?.innerText?.trim():null;
-    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent,elementContent:elContent};
+    let parentHtml = null;
+    let parentPath = null;
+    let codeSnippet = null;
+    if (cE) {
+      try {
+        parentHtml = cE.parentElement ? cE.parentElement.cloneNode(false).outerHTML.replace('></', '>... (children hidden)</') : null;
+      } catch (e) {}
+      try {
+        let path = [];
+        let el = cE;
+        while (el && el.parentElement && el.tagName.toLowerCase() !== 'body') {
+          el = el.parentElement;
+          let selector = el.tagName.toLowerCase();
+          if (el.id) {
+            selector += '#' + el.id;
+          } else if (el.className) {
+            const classes = el.classList ? Array.from(el.classList).filter(c => typeof c === 'string' && !c.startsWith('ve-')).join('.') : '';
+            if (classes) {
+              selector += '.' + classes;
+            }
+          }
+          path.unshift(selector);
+        }
+        parentPath = path.join(' > ');
+      } catch (e) {}
+      try {
+        codeSnippet = cE.outerHTML.length > 2000
+          ? cE.cloneNode(false).outerHTML.replace('></', '>... (children hidden)</')
+          : cE.outerHTML;
+      } catch (e) {}
+    }
+    const d={sourceLocation:sL,content:v,element:cE?.tagName.toLowerCase()||null,elementIndex:idx,dynamicContent:dynContent,elementContent:elContent,parent:parentHtml,parentPath:parentPath,codeSnippet:codeSnippet};
     if (files && files.length > 0) d.files = files;
     setL(true);clnL();
     if(isIF()){
@@ -259,7 +290,7 @@ function generateClientScript(config) {
         mH=(e)=>{if(!mH||!e.data||e.data.type!==CONFIG.messageTypeDataResponse)return;const o=aF!==null;clnL();if(o)setL(false);if(e.data.success&&o)clsF()};
         window.addEventListener('message',mH);
         sT=setTimeout(()=>{if(!sT)return;clnL();if(aF)setL(false)},CONFIG.submitTimeout);
-        parent.postMessage({type:CONFIG.messageTypeDataRequest,data:d},'*');
+        window.parent.postMessage({type:CONFIG.messageTypeDataRequest,data:d},'*');
       }catch(e){clnL();setL(false)}
     }else{window.dispatchEvent(new CustomEvent(CONFIG.messageTypeDataRequest,{detail:d}));setL(false);clsF()}
   }
