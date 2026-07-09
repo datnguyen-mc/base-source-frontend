@@ -93,6 +93,20 @@ function createHttp(cfg) {
     return u.toString();
   };
 
+  const getRequestLang = () => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const lang =
+        localStorage.getItem("i18nextLng") ||
+        window.navigator?.languages?.[0] ||
+        window.navigator?.language ||
+        "ko";
+      return lang.split("-")[0];
+    } catch {
+      return "ko";
+    }
+  };
+
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
     const currentToken = typeof window !== "undefined" ? (localStorage.getItem(storageKey) ?? token) : token;
@@ -105,7 +119,7 @@ function createHttp(cfg) {
           ...(init.headers || {}),
           ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
           // Add language header
-          ...(typeof window !== "undefined" ? { "Accept-Language": (localStorage.getItem("i18nextLng") || "ko") === "ko" ? "kr" : "en" } : {}),
+          ...(typeof window !== "undefined" ? { "Accept-Language": getRequestLang() } : {}),
           // Add timezone offset header
           ...(typeof window !== "undefined" ? { "x-timezone-offset": String(-(new Date().getTimezoneOffset())) } : {}),
           // Add X-App-Id header if configured
@@ -776,6 +790,113 @@ function createFunctions(http) {
 }
 
 // =============================================================
+// RBAC Module — roles / permissions / menus / me / check
+// =============================================================
+// Dedicated surface for role/permission management, backed by the platform
+// `/:projectKey/rbac/*` endpoints (DynamicRbacService) — which add idempotent
+// create-by-name/key, diff-based setRolePermissions (no lock-out window),
+// cascade deletes, and authoritative permission resolution. Prefer this over
+// raw `vibex.entities.Role/Permission/RolePermission` for management. Reuses the
+// `/entities`-stripped base (same parent as `functions`) so paths resolve to
+// `.../v1/<projectKey>/rbac/*`; the Bearer (end-user vibex.auth token) is
+// attached automatically. Management mutations require an admin caller.
+function createRbac(http) {
+  const unwrap = (res) => {
+    if (res && typeof res === "object" && res.code && res.code !== 200) {
+      throw new Error(res.message || "RBAC request failed");
+    }
+    return res && typeof res === "object" && "data" in res ? res.data : res;
+  };
+
+  const req = (path, method = "GET", body, query) => {
+    const init = { method };
+    if (query) init.query = query;
+    if (body !== undefined && method !== "GET" && method !== "HEAD") {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(body);
+    }
+    return http.request(`rbac/${path}`, init).then(unwrap);
+  };
+
+  const enc = (v) => encodeURIComponent(String(v));
+
+  // Wildcard permission match, mirroring the backend (`*`, `resource:*`, exact).
+  const matches = (granted, required) => {
+    if (!granted) return false;
+    if (granted === "*") return true;
+    if (granted === required) return true;
+    if (granted.endsWith(":*")) {
+      return String(required).startsWith(granted.slice(0, -1));
+    }
+    return false;
+  };
+
+  // Cache the caller's own grants so hasPermission() doesn't round-trip per gate.
+  let mePromise = null;
+  const me = (opts = {}) => {
+    if (opts.refresh) mePromise = null;
+    if (!mePromise) {
+      mePromise = req("me").catch((e) => {
+        mePromise = null;
+        throw e;
+      });
+    }
+    return mePromise;
+  };
+
+  return {
+    // roles
+    listRoles: () => req("roles"),
+    createRole: (body) => req("roles", "POST", body),
+    updateRole: (id, body) => req(`roles/${enc(id)}`, "PUT", body),
+    deleteRole: (id) => req(`roles/${enc(id)}`, "DELETE"),
+    getRolePermissions: (roleId) => req(`roles/${enc(roleId)}/permissions`),
+    setRolePermissions: (roleId, permissionKeys) =>
+      req(`roles/${enc(roleId)}/permissions`, "PUT", {
+        permissionKeys: permissionKeys || [],
+      }),
+    // permissions
+    listPermissions: () => req("permissions"),
+    createPermission: (body) => req("permissions", "POST", body),
+    updatePermission: (id, body) => req(`permissions/${enc(id)}`, "PUT", body),
+    deletePermission: (id) => req(`permissions/${enc(id)}`, "DELETE"),
+    // users
+    assignRole: (userId, roleName) =>
+      req(`users/${enc(userId)}/role`, "POST", { role: roleName }),
+    // menus
+    menus: () => req("menus"),
+    menusFlat: () => req("menus/flat"),
+    createMenu: (body) => req("menus", "POST", body),
+    updateMenu: (id, body) => req(`menus/${enc(id)}`, "PUT", body),
+    deleteMenu: (id) => req(`menus/${enc(id)}`, "DELETE"),
+    // current user
+    me,
+    myMenus: () => req("me/menus"),
+    check: (permission, mode = "any") =>
+      req(
+        "check",
+        "POST",
+        Array.isArray(permission)
+          ? { permissions: permission, mode }
+          : { permission }
+      ),
+    // idempotent bootstrap (admin)
+    seed: (body) => req("seed", "POST", body || {}),
+    // client-side convenience: cached me() + local wildcard eval (UX gating only;
+    // enforce real access in edge functions via check()).
+    hasPermission: async (key, opts = {}) => {
+      const info = await me(opts);
+      if (info && info.isAdmin) return true;
+      const perms = (info && info.permissions) || [];
+      return perms.some((g) => matches(g, key));
+    },
+    refresh: () => {
+      mePromise = null;
+    },
+  };
+}
+
+// =============================================================
 // Root createClient
 // =============================================================
 export function createClient(config) {
@@ -805,6 +926,7 @@ export function createClient(config) {
     entities: createEntities(http),
     integrations: createIntegrations(http),
     functions: createFunctions(httpFunctions),
+    rbac: createRbac(httpFunctions),
     auth: createAuth(http, config),
     setToken: (t) => {
       http.setToken(t, true);
