@@ -643,7 +643,10 @@ function createRbac(http) {
     createPermission: (body) => req("permissions", "POST", body),
     updatePermission: (id, body) => req(`permissions/${enc(id)}`, "PUT", body),
     deletePermission: (id) => req(`permissions/${enc(id)}`, "DELETE"),
-    // users
+    // users — a user may hold MANY roles (many-to-many via UserRole)
+    assignRoles: (userId, roleNames) =>
+      req(`users/${enc(userId)}/roles`, "PUT", { roles: roleNames || [] }),
+    // back-compat single-role assign (replaces the user's roles with [roleName])
     assignRole: (userId, roleName) =>
       req(`users/${enc(userId)}/role`, "POST", { role: roleName }),
     // menus
