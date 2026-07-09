@@ -350,6 +350,23 @@ function createEntities(http) {
                       method: "GET",
                     });
 
+                  // Atomic server-side counter bump (like/comment/view counts).
+                  // Usage: entities.Post.increment(id, "likeCount", 1)
+                  //        entities.Post.increment(id, "likeCount", -1)  // unlike
+                  // The field must be declared `counter: true` in the entity
+                  // policy; non-admin callers are clamped to a ±1 step. Never
+                  // write counter fields through create/update — they're stripped.
+                  case "increment": {
+                    const id = args[0];
+                    const field = args[1];
+                    const by = args[2] === undefined ? 1 : args[2];
+                    return http.request(`${entity}/${id}/increment`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ field, by }),
+                    });
+                  }
+
                   default:
                     return http.request(`${entity}`, {
                       method: "GET",
