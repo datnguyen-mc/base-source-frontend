@@ -269,16 +269,22 @@ function createEntities(http) {
               return async (...args) => {
                 switch (method) {
                   case "list":
-                    return http.request(`${entity}`, {
+                    // GET /<entity>/list — returns an ARRAY. Pass
+                    // { filter, sort, limit, page, fields }; filter/sort are
+                    // JSON-encoded (server whitelists filter keys to real
+                    // schema fields) and the entity read-policy is enforced.
+                    return http.request(`${entity}/list`, {
                       method: "GET",
                       query: clean({
-                        query: clean({
-                          filter: 1,
-                          sort: 1,
-                          limit: args[0]?.limit,
-                          skip: args[0]?.skip,
-                          fields: arrToCsv(args[0]?.fields),
-                        }),
+                        filter: args[0]?.filter
+                          ? JSON.stringify(args[0].filter)
+                          : undefined,
+                        sort: args[0]?.sort
+                          ? JSON.stringify(args[0].sort)
+                          : undefined,
+                        limit: args[0]?.limit,
+                        page: args[0]?.page,
+                        fields: arrToCsv(args[0]?.fields),
                       }),
                     });
 
@@ -365,6 +371,53 @@ function createEntities(http) {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ field, by }),
                     });
+                  }
+
+                  // Fetch one record by id (alias of get()).
+                  // Usage: entities.Post.findById(id) -> record | null
+                  case "findById":
+                    return http.request(
+                      `${entity}/${encodeURIComponent(args[0])}/get`,
+                      { method: "GET" }
+                    );
+
+                  // Find records where <field> === <value>.
+                  // Usage: entities.User.findByField("email", "a@b.com")
+                  //        entities.Order.findByField("status", "paid", { sort: { created_at: -1 }, limit: 20 })
+                  // Returns an ARRAY. The field must be a real schema field
+                  // (server whitelists filter keys); the entity read-policy is
+                  // enforced (owner-scope + read-mask), so you only get rows you
+                  // may read.
+                  case "findByField": {
+                    const field = args[0];
+                    const value = args[1];
+                    const opts = args[2] || {};
+                    return http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify({ [field]: value }),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: opts.limit,
+                        page: opts.page,
+                        fields: arrToCsv(opts.fields),
+                      }),
+                    });
+                  }
+
+                  // Find the FIRST record where <field> === <value>, or null.
+                  // Usage: const u = await entities.User.findOneByField("email", email)
+                  case "findOneByField": {
+                    const field = args[0];
+                    const value = args[1];
+                    const res = await http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify({ [field]: value }),
+                        limit: 1,
+                      }),
+                    });
+                    const arr = Array.isArray(res) ? res : (res?.data ?? []);
+                    return arr.length ? arr[0] : null;
                   }
 
                   default:
