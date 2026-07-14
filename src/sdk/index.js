@@ -420,6 +420,70 @@ function createEntities(http) {
                     return arr.length ? arr[0] : null;
                   }
 
+                  // Find records matching MULTIPLE conditions (ANDed).
+                  // Usage: entities.Order.findByFields({ userId, status: "paid" })
+                  //        entities.Order.findByFields({ status: "paid" }, { sort: { created_at: -1 }, limit: 50 })
+                  // Returns an ARRAY. Filter keys must be real schema fields
+                  // (server whitelists them) and the read-policy is enforced.
+                  case "findByFields": {
+                    const filter = args[0] || {};
+                    const opts = args[1] || {};
+                    return http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify(filter),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: opts.limit,
+                        page: opts.page,
+                        fields: arrToCsv(opts.fields),
+                      }),
+                    });
+                  }
+
+                  // Find the FIRST record matching a general filter object, or null.
+                  // Usage: const o = await entities.Order.findOne({ userId, status: "pending" })
+                  case "findOne": {
+                    const filter = args[0] || {};
+                    const opts = args[1] || {};
+                    const res = await http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify(filter),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: 1,
+                      }),
+                    });
+                    const arr = Array.isArray(res) ? res : (res?.data ?? []);
+                    return arr.length ? arr[0] : null;
+                  }
+
+                  // ---- Bulk ops (each row/id is policy-enforced server-side) ----
+                  // entities.Product.createMany([{...}, {...}])
+                  case "createMany":
+                    return http.request(`${entity}/createMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ items: args[0] || [] }),
+                    });
+
+                  // Create-or-update by id: items WITH an existing id → update,
+                  // else → create. entities.Product.upsertMany([{ id, ... }, {...}])
+                  case "upsertMany":
+                    return http.request(`${entity}/upsertMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ items: args[0] || [] }),
+                    });
+
+                  // Delete a list of ids (each ownership-checked; foreign ids are
+                  // skipped). entities.Product.deleteMany([id1, id2, ...])
+                  case "deleteMany":
+                    return http.request(`${entity}/deleteMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ ids: args[0] || [] }),
+                    });
+
                   default:
                     return http.request(`${entity}`, {
                       method: "GET",
@@ -703,10 +767,26 @@ function createRbac(http) {
     createRole: (body) => req("roles", "POST", body),
     updateRole: (id, body) => req(`roles/${enc(id)}`, "PUT", body),
     deleteRole: (id) => req(`roles/${enc(id)}`, "DELETE"),
-    getRolePermissions: (roleId) => req(`roles/${enc(roleId)}/permissions`),
-    setRolePermissions: (roleId, permissionKeys) =>
+    // Returns a flat ARRAY of the role's permission KEYS (string[]) — kept for
+    // display + the legacy key-based editor. (Endpoint responds
+    // `{ roleId, role, permissions, permissionIds }`; we unwrap to `permissions`.)
+    getRolePermissions: (roleId) =>
+      req(`roles/${enc(roleId)}/permissions`).then((r) =>
+        Array.isArray(r) ? r : (r && r.permissions) || []
+      ),
+    // Returns a flat ARRAY of the role's permission IDS (string[]) — the
+    // AUTHORITATIVE set. Use this to pre-check the role editor BY ID (like the
+    // console FE): `ids.map(String).includes(String(permission.id))`.
+    getRolePermissionIds: (roleId) =>
+      req(`roles/${enc(roleId)}/permissions`).then((r) =>
+        Array.isArray(r) ? [] : (r && r.permissionIds) || []
+      ),
+    // Save a role's permissions BY ID (console-style). Accepts permission IDS
+    // (preferred, authoritative) or keys — the backend resolves each ref and
+    // stores the map keyed by permissionId.
+    setRolePermissions: (roleId, permissionIds) =>
       req(`roles/${enc(roleId)}/permissions`, "PUT", {
-        permissionKeys: permissionKeys || [],
+        permissionIds: permissionIds || [],
       }),
     // permissions
     listPermissions: () => req("permissions"),
