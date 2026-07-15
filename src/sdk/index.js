@@ -158,7 +158,10 @@ function createHttp(cfg) {
 
       throw {
         name: "vibexClientError",
-        message: "Unauthorized",
+        // Surface the SERVER's message (e.g. "Invalid email or password" on a
+        // failed login) instead of a generic "Unauthorized", so the app can
+        // show the real reason via `err.message`.
+        message: data?.message || data?.title || "Unauthorized",
         status: res.status,
         data,
       };
@@ -356,22 +359,11 @@ function createEntities(http) {
                       method: "GET",
                     });
 
-                  // Atomic server-side counter bump (like/comment/view counts).
-                  // Usage: entities.Post.increment(id, "likeCount", 1)
-                  //        entities.Post.increment(id, "likeCount", -1)  // unlike
-                  // The field must be declared `counter: true` in the entity
-                  // policy; non-admin callers are clamped to a ±1 step. Never
-                  // write counter fields through create/update — they're stripped.
-                  case "increment": {
-                    const id = args[0];
-                    const field = args[1];
-                    const by = args[2] === undefined ? 1 : args[2];
-                    return http.request(`${entity}/${id}/increment`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ field, by }),
-                    });
-                  }
+                  // NOTE: the client `increment` op was REMOVED. Counters
+                  // (like/comment/view) are NOT bumped from the client — they are
+                  // derived SERVER-SIDE by a TRIGGER from a policy-gated source
+                  // row (e.g. a `Like`), so a `counter:true` field can never be
+                  // written or spammed by the client.
 
                   // Fetch one record by id (alias of get()).
                   // Usage: entities.Post.findById(id) -> record | null
