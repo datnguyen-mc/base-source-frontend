@@ -288,6 +288,7 @@ function createEntities(http) {
                         limit: args[0]?.limit,
                         page: args[0]?.page,
                         fields: arrToCsv(args[0]?.fields),
+                        populate: args[0]?.populate === false ? undefined : 1,
                       }),
                     });
 
@@ -300,13 +301,17 @@ function createEntities(http) {
                         filter: args[0]?.filter ? JSON.stringify(args[0].filter) : undefined,
                         sort: args[0]?.sort ? JSON.stringify(args[0].sort) : undefined,
                         fields: arrToCsv(args[0]?.fields),
+                        populate: args[0]?.populate === false ? undefined : 1,
                       }),
                     });
 
                   case "get":
                     return http.request(
                       `${entity}/${encodeURIComponent(args[0])}/get`,
-                      { method: "GET" }
+                      {
+                        method: "GET",
+                        query: clean({ populate: args[1]?.populate === false ? undefined : 1 }),
+                      }
                     );
 
                   case "create": {
@@ -370,7 +375,10 @@ function createEntities(http) {
                   case "findById":
                     return http.request(
                       `${entity}/${encodeURIComponent(args[0])}/get`,
-                      { method: "GET" }
+                      {
+                        method: "GET",
+                        query: clean({ populate: args[1]?.populate === false ? undefined : 1 }),
+                      }
                     );
 
                   // Find records where <field> === <value>.
@@ -392,6 +400,7 @@ function createEntities(http) {
                         limit: opts.limit,
                         page: opts.page,
                         fields: arrToCsv(opts.fields),
+                        populate: opts.populate === false ? undefined : 1,
                       }),
                     });
                   }
@@ -406,6 +415,7 @@ function createEntities(http) {
                       query: clean({
                         filter: JSON.stringify({ [field]: value }),
                         limit: 1,
+                        populate: 1,
                       }),
                     });
                     const arr = Array.isArray(res) ? res : (res?.data ?? []);
@@ -428,6 +438,7 @@ function createEntities(http) {
                         limit: opts.limit,
                         page: opts.page,
                         fields: arrToCsv(opts.fields),
+                        populate: opts.populate === false ? undefined : 1,
                       }),
                     });
                   }
@@ -443,6 +454,7 @@ function createEntities(http) {
                         filter: JSON.stringify(filter),
                         sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
                         limit: 1,
+                        populate: 1,
                       }),
                     });
                     const arr = Array.isArray(res) ? res : (res?.data ?? []);
