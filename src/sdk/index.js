@@ -151,7 +151,7 @@ function createHttp(cfg) {
         token = undefined;
         if (typeof window !== "undefined") {
           if (!path.includes("auth/login") && !path.includes("auth/register") && !path.includes("auth/me")) {
-            window.location.href = "/";
+            // window.location.href = "/";
           }
         }
       } catch (e) { }
