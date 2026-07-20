@@ -1,84 +1,80 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import path from "path";
-import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js'
+import { babelTransformPlugin } from './vite-plugins/babel-transform-plugin.js';
+import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js';
 import { errorOverlayPlugin } from './vite-plugins/error-overlay-plugin.js'
 import { postMessageInject } from "./vite-plugins/postmessage-inject.js";
 
-export default defineConfig({
-  plugins: [
-    visualEditPlugin(),
-    react(),
-    errorOverlayPlugin(),
-    postMessageInject(),
-    {
-      name: 'iframe-hmr',
-      configureServer(server) {
-        server.middlewares.use((req, res, next) => {
-          // Allow iframe embedding
-          res.setHeader('X-Frame-Options', 'ALLOWALL');
-          res.setHeader('Content-Security-Policy', "frame-ancestors *;");
-          next();
-        });
-      }
-    }
-  ].filter(Boolean),
-  build: {
-    rollupOptions: {
-      onwarn(warning, warn) {
-        // Treat import errors as fatal errors
-        if (
-          warning.code === "UNRESOLVED_IMPORT" ||
-          warning.code === "MISSING_EXPORT"
-        ) {
-          throw new Error(`Build failed: ${warning.message}`);
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const isProduction = env.VITE_APP_ENV === 'production';
+
+  return {
+    plugins: [
+      react(),
+      ...(!isProduction
+        ? [
+          babelTransformPlugin(),
+          visualEditPlugin(),
+          errorOverlayPlugin(),
+          postMessageInject(),
+          {
+            name: 'iframe-hmr',
+            configureServer(server) {
+              server.middlewares.use((req, res, next) => {
+                // Allow iframe embedding
+                res.setHeader('X-Frame-Options', 'ALLOWALL');
+                res.setHeader('Content-Security-Policy', "frame-ancestors *;");
+                next();
+              });
+            }
+          },
+        ]
+        : []),
+    ].filter(Boolean),
+    build: {
+      sourcemap: false,
+    },
+    server: {
+      port: 5173,
+      allowedHosts: true,
+      watch: {
+        usePolling: true,
+        interval: 1000,
+        binaryInterval: 2000,
+        ignored: [
+          "**/node_modules/**",
+          "**/.git/**",
+          "**/dist/**",
+          "**/build/**",
+          "**/.idea/**",
+          "**/.vscode/**",
+          "**/*.log",
+          "**/.DS_Store",
+          "**/assets/**",
+          "**/vite-plugins/**",
+          "**/public/**",
+          "**/*.md",
+          "**/coverage/**",
+          "**/.husky/**",
+        ],
+        awaitWriteFinish: {
+          stabilityThreshold: 800,
+          pollInterval: 1000
         }
-        // Use default for other warnings
-        warn(warning);
+      },
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        Pragma: "no-cache",
+        Expires: "0",
       },
     },
-  },
-  server: {
-    port: 5173,
-    allowedHosts: true,
-    watch: {
-      usePolling: true,
-      interval: 500,
-      ignored: [
-        "**/node_modules/**",
-        "**/.git/**",
-        "**/dist/**",
-        "**/build/**",
-        "**/.idea/**",
-        "**/.vscode/**",
-        "**/*.log",
-        "**/.DS_Store",
-        "**/assets/**",
-        "**/vite-plugins/**",
-      ],
-      awaitWriteFinish: {
-        stabilityThreshold: 500,
-        pollInterval: 100
-      }
-    },
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  },
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-    dedupe: ['react', 'react-dom']
-  },
-  optimizeDeps: {
-    include: ["react", "react-dom"],
-    esbuildOptions: {
-      loader: {
-        ".js": "jsx",
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
       },
-    },
-  },
+      dedupe: ['react', 'react-dom']
+    }
+  };
 });

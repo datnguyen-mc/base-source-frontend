@@ -69,7 +69,7 @@ function objectToFormData(obj, form = new FormData(), ns) {
 // ================== http layer ==================
 function createHttp(cfg) {
   const fetchImpl = cfg.fetchImpl ?? fetch;
-  const storageKey = cfg.storageKey ?? "access_token";
+  const storageKey = "access_token";
   let token =
     cfg.token ??
     (typeof window !== "undefined"
@@ -93,17 +93,40 @@ function createHttp(cfg) {
     return u.toString();
   };
 
+  const getRequestLang = () => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const lang =
+        localStorage.getItem("i18nextLng") ||
+        window.navigator?.languages?.[0] ||
+        window.navigator?.language ||
+        "ko";
+      return lang.split("-")[0];
+    } catch {
+      return "ko";
+    }
+  };
+
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
-
-    const res = await fetchImpl(url, {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        ...(init.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    const currentToken = typeof window !== "undefined" ? (localStorage.getItem(storageKey) ?? token) : token;
+    let res;
+    try {
+      res = await fetchImpl(url, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          ...(init.headers || {}),
+          ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
+          // Add language header
+          ...(typeof window !== "undefined" ? { "Accept-Language": getRequestLang() } : {}),
+          // Add timezone offset header
+          ...(typeof window !== "undefined" ? { "x-timezone-offset": String(-(new Date().getTimezoneOffset())) } : {}),
+        },
+      });
+    } catch {
+      return undefined;
+    }
 
     if (res.status === 204) return undefined;
 
@@ -121,15 +144,15 @@ function createHttp(cfg) {
     }
 
     // unauthorized → auto redirect
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       console.warn(`[vibexClient SDK] Unauthorized (${res.status})`);
 
       try {
         token = undefined;
         if (typeof window !== "undefined") {
-          localStorage.removeItem(storageKey);
-          localStorage.removeItem("refresh_token");
-          window.location.href = "/signin";
+          if (!path.includes("auth/login") && !path.includes("auth/register") && !path.includes("auth/me")) {
+            // window.location.href = "/";
+          }
         }
       } catch (e) { }
 
@@ -169,9 +192,10 @@ function createDynamicModule(basePath, http) {
         return async (...args) => {
           let path = basePath;
           let last = args[args.length - 1];
-
+          if (last?.filter) last.filter = JSON.stringify(last.filter);
+          if (last?.sort) last.sort = JSON.stringify(last.sort);
           // pure GET methods
-          const GET_METHODS = ["list", "filter", "search", "count"];
+          const GET_METHODS = ["list", "filter", "search", "count", "paging"];
 
           // Determine GET vs POST properly
           if (GET_METHODS.includes(method)) {
@@ -237,36 +261,42 @@ function createEntities(http) {
     {
       get(_t, entityName) {
         const entity = String(entityName);
-
         return new Proxy(
           {},
           {
             get(_t2, rawMethod) {
               const method = String(rawMethod);
-
               return async (...args) => {
                 switch (method) {
                   case "list":
                     return http.request(`${entity}`, {
                       method: "GET",
-                      query: clean(args[0]),
+                      query: clean({
+                        query: clean({
+                          filter: 1,
+                          sort: 1,
+                          limit: args[0]?.limit,
+                          skip: args[0]?.skip,
+                          fields: arrToCsv(args[0]?.fields),
+                        }),
+                      }),
                     });
 
-                  case "filter":
-                    return http.request(`${entity}`, {
+                  case "paging":
+                    return http.request(`${entity}/paging`, {
                       method: "GET",
                       query: clean({
-                        q: JSON.stringify(args[0] ?? {}),
-                        sort: args[0]?.sort,
-                        limit: args[0]?.limit,
-                        skip: args[0]?.skip,
+                        page: args[0]?.page,
+                        pageSize: args[0]?.pageSize,
+                        filter: args[0]?.filter ? JSON.stringify(args[0].filter) : undefined,
+                        sort: args[0]?.sort ? JSON.stringify(args[0].sort) : undefined,
                         fields: arrToCsv(args[0]?.fields),
                       }),
                     });
 
                   case "get":
                     return http.request(
-                      `${entity}/${encodeURIComponent(args[0])}`,
+                      `${entity}/${encodeURIComponent(args[0])}/get`,
                       { method: "GET" }
                     );
 
@@ -280,12 +310,12 @@ function createEntities(http) {
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
                       const fd = objectToFormData(data);
-                      return http.request(`${entity}`, {
+                      return http.request(`${entity}/create`, {
                         method: "POST",
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}`, {
+                    return http.request(`${entity}/create`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
@@ -297,27 +327,27 @@ function createEntities(http) {
                     const data = args[1];
                     if (isFormDataLike(data)) {
                       return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                        method: "POST",
                         body: data,
                       });
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
                       const fd = objectToFormData(data);
-                      return http.request(`${entity}/${id}`, {
-                        method: "PUT",
+                      return http.request(`${entity}/${id}/update`, {
+                        method: "POST",
                         body: fd,
                       });
                     }
-                    return http.request(`${entity}/${id}`, {
-                      method: "PUT",
+                    return http.request(`${entity}/${id}/update`, {
+                      method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
                     });
                   }
 
                   case "delete":
-                    return http.request(`${entity}/${args[0]}`, {
-                      method: "DELETE",
+                    return http.request(`${entity}/${args[0]}/delete`, {
+                      method: "GET",
                     });
 
                   default:
@@ -392,15 +422,16 @@ function createAuth(http, cfg) {
 
         return async (...args) => {
           switch (name) {
-            case "me":
-              return http.request("auth/me", { method: "GET" });
-
-            case "updateMe":
-              return http.request("auth/me", {
-                method: "PATCH",
+            case "register": {
+              const res = await http.request("auth/register", {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(args[0]),
+                body: JSON.stringify(args[0] ?? {}),
               });
+              if (res?.data.data.token) localStorage.setItem("access_token", res.data.data.token);
+              if (res?.data.data.user) localStorage.setItem("user", JSON.stringify(res.data.data.user));
+              return res;
+            }
 
             case "login": {
               const payload =
@@ -413,17 +444,58 @@ function createAuth(http, cfg) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
               });
-
-              if (res?.token) http.setToken(res.token, true);
+              if (res?.data?.data?.token) localStorage.setItem("access_token", res.data.data.token);
+              if (res?.data?.data?.user) localStorage.setItem("user", JSON.stringify(res.data.data.user));
               return res;
             }
+
+            case "me":
+              return http.request("auth/me", { method: "GET" });
+
+            case "refresh": {
+              const res = await http.request("auth/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+              if (res?.data.refresh_token) http.setToken(res.data.refresh_token, true);
+              return res;
+            }
+
+            case "changePassword":
+              return http.request("auth/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "updateProfile":
+              return http.request("auth/update-profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "verify":
+              return http.request("auth/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0] ?? {}),
+              });
+
+            case "updateMe":
+              return http.request("auth/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args[0]),
+              });
 
             case "logout":
               http.setToken(undefined, true);
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
-                localStorage.removeItem("refresh_token");
-                window.location.href = "/signin";
+                localStorage.removeItem("user");
+                window.location.href = "/";
               }
               return;
 
@@ -444,16 +516,78 @@ function createAuth(http, cfg) {
 }
 
 // =============================================================
+// Functions Module — Edge Function Invocation
+// =============================================================
+function createFunctions(http) {
+  /**
+   * Invoke an edge function by name.
+   * @param {string} functionName - The function slug (e.g. "weather", "stripe-webhook")
+   * @param {object} [options] - Request options
+   * @param {string} [options.method="POST"] - HTTP method (GET, POST, PUT, DELETE)
+   * @param {object} [options.body] - Request body (for POST/PUT)
+   * @param {object} [options.query] - Query parameters (for GET)
+   * @param {object} [options.headers] - Additional headers
+   * @returns {Promise<any>} Response data
+   */
+  const invoke = async (functionName, options = {}) => {
+    const method = (options.method || "POST").toUpperCase();
+    const init = { method };
+
+    if (options.query) {
+      init.query = options.query;
+    }
+
+    if (options.headers) {
+      init.headers = { ...options.headers };
+    }
+
+    if (options.body && method !== "GET" && method !== "HEAD") {
+      init.headers = {
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      };
+      init.body = JSON.stringify(options.body);
+    }
+
+    return http.request(`functions/${encodeURIComponent(functionName)}`, init);
+  };
+
+  // Allow both client.functions.invoke("name", opts)
+  // and client.functions.name(data) shorthand
+  return new Proxy(
+    { invoke },
+    {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+
+        const fnName = String(prop);
+        return async (data, options = {}) => {
+          return invoke(fnName, {
+            ...options,
+            body: data,
+          });
+        };
+      },
+    }
+  );
+}
+
+// =============================================================
 // Root createClient
 // =============================================================
 export function createClient(config) {
   if (!config?.serverUrl) throw new Error("serverUrl is required");
 
   const http = createHttp(config);
+  const httpFunctions = createHttp({
+    ...config,
+    serverUrl: config.serverUrl.replace(/\/entities\/?$/, ""),
+  });
 
   const client = {
     entities: createEntities(http),
     integrations: createIntegrations(http),
+    functions: createFunctions(httpFunctions),
     auth: createAuth(http, config),
     setToken: (t) => http.setToken(t, true),
     getConfig: () => ({ serverUrl: config.serverUrl }),
