@@ -491,6 +491,20 @@ function createAuth(http, cfg) {
               });
 
             case "logout":
+              // Server-side session invalidation FIRST: ask the backend to
+              // revoke this token (Redis denylist) so it can no longer be used
+              // even before it expires. The current token is still set, so
+              // http.request() attaches it as the Bearer credential to revoke.
+              // Best-effort: a network/API error must NOT trap the user in a
+              // logged-in state, so we always clear locally afterwards.
+              try {
+                await http.request("auth/logout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                });
+              } catch (_) {
+                // ignore — proceed to clear local session regardless
+              }
               http.setToken(undefined, true);
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
