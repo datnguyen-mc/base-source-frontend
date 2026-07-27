@@ -158,7 +158,10 @@ function createHttp(cfg) {
 
       throw {
         name: "vibexClientError",
-        message: "Unauthorized",
+        // Surface the SERVER's message (e.g. "Invalid email or password" on a
+        // failed login) instead of a generic "Unauthorized", so the app can
+        // show the real reason via `err.message`.
+        message: data?.message || data?.title || "Unauthorized",
         status: res.status,
         data,
       };
@@ -269,16 +272,23 @@ function createEntities(http) {
               return async (...args) => {
                 switch (method) {
                   case "list":
-                    return http.request(`${entity}`, {
+                    // GET /<entity>/list — returns an ARRAY. Pass
+                    // { filter, sort, limit, page, fields }; filter/sort are
+                    // JSON-encoded (server whitelists filter keys to real
+                    // schema fields) and the entity read-policy is enforced.
+                    return http.request(`${entity}/list`, {
                       method: "GET",
                       query: clean({
-                        query: clean({
-                          filter: 1,
-                          sort: 1,
-                          limit: args[0]?.limit,
-                          skip: args[0]?.skip,
-                          fields: arrToCsv(args[0]?.fields),
-                        }),
+                        filter: args[0]?.filter
+                          ? JSON.stringify(args[0].filter)
+                          : undefined,
+                        sort: args[0]?.sort
+                          ? JSON.stringify(args[0].sort)
+                          : undefined,
+                        limit: args[0]?.limit,
+                        page: args[0]?.page,
+                        fields: arrToCsv(args[0]?.fields),
+                        populate: args[0]?.populate === false ? undefined : 1,
                       }),
                     });
 
@@ -291,13 +301,17 @@ function createEntities(http) {
                         filter: args[0]?.filter ? JSON.stringify(args[0].filter) : undefined,
                         sort: args[0]?.sort ? JSON.stringify(args[0].sort) : undefined,
                         fields: arrToCsv(args[0]?.fields),
+                        populate: args[0]?.populate === false ? undefined : 1,
                       }),
                     });
 
                   case "get":
                     return http.request(
                       `${entity}/${encodeURIComponent(args[0])}/get`,
-                      { method: "GET" }
+                      {
+                        method: "GET",
+                        query: clean({ populate: args[1]?.populate === false ? undefined : 1 }),
+                      }
                     );
 
                   case "create": {
@@ -348,6 +362,130 @@ function createEntities(http) {
                   case "delete":
                     return http.request(`${entity}/${args[0]}/delete`, {
                       method: "GET",
+                    });
+
+                  // NOTE: the client `increment` op was REMOVED. Counters
+                  // (like/comment/view) are NOT bumped from the client — they are
+                  // derived SERVER-SIDE by a TRIGGER from a policy-gated source
+                  // row (e.g. a `Like`), so a `counter:true` field can never be
+                  // written or spammed by the client.
+
+                  // Fetch one record by id (alias of get()).
+                  // Usage: entities.Post.findById(id) -> record | null
+                  case "findById":
+                    return http.request(
+                      `${entity}/${encodeURIComponent(args[0])}/get`,
+                      {
+                        method: "GET",
+                        query: clean({ populate: args[1]?.populate === false ? undefined : 1 }),
+                      }
+                    );
+
+                  // Find records where <field> === <value>.
+                  // Usage: entities.User.findByField("email", "a@b.com")
+                  //        entities.Order.findByField("status", "paid", { sort: { created_at: -1 }, limit: 20 })
+                  // Returns an ARRAY. The field must be a real schema field
+                  // (server whitelists filter keys); the entity read-policy is
+                  // enforced (owner-scope + read-mask), so you only get rows you
+                  // may read.
+                  case "findByField": {
+                    const field = args[0];
+                    const value = args[1];
+                    const opts = args[2] || {};
+                    return http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify({ [field]: value }),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: opts.limit,
+                        page: opts.page,
+                        fields: arrToCsv(opts.fields),
+                        populate: opts.populate === false ? undefined : 1,
+                      }),
+                    });
+                  }
+
+                  // Find the FIRST record where <field> === <value>, or null.
+                  // Usage: const u = await entities.User.findOneByField("email", email)
+                  case "findOneByField": {
+                    const field = args[0];
+                    const value = args[1];
+                    const res = await http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify({ [field]: value }),
+                        limit: 1,
+                        populate: 1,
+                      }),
+                    });
+                    const arr = Array.isArray(res) ? res : (res?.data ?? []);
+                    return arr.length ? arr[0] : null;
+                  }
+
+                  // Find records matching MULTIPLE conditions (ANDed).
+                  // Usage: entities.Order.findByFields({ userId, status: "paid" })
+                  //        entities.Order.findByFields({ status: "paid" }, { sort: { created_at: -1 }, limit: 50 })
+                  // Returns an ARRAY. Filter keys must be real schema fields
+                  // (server whitelists them) and the read-policy is enforced.
+                  case "findByFields": {
+                    const filter = args[0] || {};
+                    const opts = args[1] || {};
+                    return http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify(filter),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: opts.limit,
+                        page: opts.page,
+                        fields: arrToCsv(opts.fields),
+                        populate: opts.populate === false ? undefined : 1,
+                      }),
+                    });
+                  }
+
+                  // Find the FIRST record matching a general filter object, or null.
+                  // Usage: const o = await entities.Order.findOne({ userId, status: "pending" })
+                  case "findOne": {
+                    const filter = args[0] || {};
+                    const opts = args[1] || {};
+                    const res = await http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify(filter),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: 1,
+                        populate: 1,
+                      }),
+                    });
+                    const arr = Array.isArray(res) ? res : (res?.data ?? []);
+                    return arr.length ? arr[0] : null;
+                  }
+
+                  // ---- Bulk ops (each row/id is policy-enforced server-side) ----
+                  // entities.Product.createMany([{...}, {...}])
+                  case "createMany":
+                    return http.request(`${entity}/createMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ items: args[0] || [] }),
+                    });
+
+                  // Create-or-update by id: items WITH an existing id → update,
+                  // else → create. entities.Product.upsertMany([{ id, ... }, {...}])
+                  case "upsertMany":
+                    return http.request(`${entity}/upsertMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ items: args[0] || [] }),
+                    });
+
+                  // Delete a list of ids (each ownership-checked; foreign ids are
+                  // skipped). entities.Product.deleteMany([id1, id2, ...])
+                  case "deleteMany":
+                    return http.request(`${entity}/deleteMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ ids: args[0] || [] }),
                     });
 
                   default:
@@ -587,6 +725,132 @@ function createFunctions(http) {
 }
 
 // =============================================================
+// RBAC Module — roles / permissions / menus / me / check
+// =============================================================
+// Dedicated surface for role/permission management, backed by the platform
+// `/:projectKey/rbac/*` endpoints (DynamicRbacService) — which add idempotent
+// create-by-name/key, diff-based setRolePermissions (no lock-out window),
+// cascade deletes, and authoritative permission resolution. Prefer this over
+// raw `vibex.entities.Role/Permission/RolePermission` for management. Reuses the
+// `/entities`-stripped base (same parent as `functions`) so paths resolve to
+// `.../v1/<projectKey>/rbac/*`; the Bearer (end-user vibex.auth token) is
+// attached automatically. Management mutations require an admin caller.
+function createRbac(http) {
+  const unwrap = (res) => {
+    if (res && typeof res === "object" && res.code && res.code !== 200) {
+      throw new Error(res.message || "RBAC request failed");
+    }
+    return res && typeof res === "object" && "data" in res ? res.data : res;
+  };
+
+  const req = (path, method = "GET", body, query) => {
+    const init = { method };
+    if (query) init.query = query;
+    if (body !== undefined && method !== "GET" && method !== "HEAD") {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(body);
+    }
+    return http.request(`rbac/${path}`, init).then(unwrap);
+  };
+
+  const enc = (v) => encodeURIComponent(String(v));
+
+  // Wildcard permission match, mirroring the backend (`*`, `resource:*`, exact).
+  const matches = (granted, required) => {
+    if (!granted) return false;
+    if (granted === "*") return true;
+    if (granted === required) return true;
+    if (granted.endsWith(":*")) {
+      return String(required).startsWith(granted.slice(0, -1));
+    }
+    return false;
+  };
+
+  // Cache the caller's own grants so hasPermission() doesn't round-trip per gate.
+  let mePromise = null;
+  const me = (opts = {}) => {
+    if (opts.refresh) mePromise = null;
+    if (!mePromise) {
+      mePromise = req("me").catch((e) => {
+        mePromise = null;
+        throw e;
+      });
+    }
+    return mePromise;
+  };
+
+  return {
+    // roles
+    listRoles: () => req("roles"),
+    createRole: (body) => req("roles", "POST", body),
+    updateRole: (id, body) => req(`roles/${enc(id)}`, "PUT", body),
+    deleteRole: (id) => req(`roles/${enc(id)}`, "DELETE"),
+    // Returns a flat ARRAY of the role's permission KEYS (string[]) — kept for
+    // display + the legacy key-based editor. (Endpoint responds
+    // `{ roleId, role, permissions, permissionIds }`; we unwrap to `permissions`.)
+    getRolePermissions: (roleId) =>
+      req(`roles/${enc(roleId)}/permissions`).then((r) =>
+        Array.isArray(r) ? r : (r && r.permissions) || []
+      ),
+    // Returns a flat ARRAY of the role's permission IDS (string[]) — the
+    // AUTHORITATIVE set. Use this to pre-check the role editor BY ID (like the
+    // console FE): `ids.map(String).includes(String(permission.id))`.
+    getRolePermissionIds: (roleId) =>
+      req(`roles/${enc(roleId)}/permissions`).then((r) =>
+        Array.isArray(r) ? [] : (r && r.permissionIds) || []
+      ),
+    // Save a role's permissions BY ID (console-style). Accepts permission IDS
+    // (preferred, authoritative) or keys — the backend resolves each ref and
+    // stores the map keyed by permissionId.
+    setRolePermissions: (roleId, permissionIds) =>
+      req(`roles/${enc(roleId)}/permissions`, "PUT", {
+        permissionIds: permissionIds || [],
+      }),
+    // permissions
+    listPermissions: () => req("permissions"),
+    createPermission: (body) => req("permissions", "POST", body),
+    updatePermission: (id, body) => req(`permissions/${enc(id)}`, "PUT", body),
+    deletePermission: (id) => req(`permissions/${enc(id)}`, "DELETE"),
+    // users — a user may hold MANY roles (many-to-many via UserRole)
+    assignRoles: (userId, roleNames) =>
+      req(`users/${enc(userId)}/roles`, "PUT", { roles: roleNames || [] }),
+    // back-compat single-role assign (replaces the user's roles with [roleName])
+    assignRole: (userId, roleName) =>
+      req(`users/${enc(userId)}/role`, "POST", { role: roleName }),
+    // menus
+    menus: () => req("menus"),
+    menusFlat: () => req("menus/flat"),
+    createMenu: (body) => req("menus", "POST", body),
+    updateMenu: (id, body) => req(`menus/${enc(id)}`, "PUT", body),
+    deleteMenu: (id) => req(`menus/${enc(id)}`, "DELETE"),
+    // current user
+    me,
+    myMenus: () => req("me/menus"),
+    check: (permission, mode = "any") =>
+      req(
+        "check",
+        "POST",
+        Array.isArray(permission)
+          ? { permissions: permission, mode }
+          : { permission }
+      ),
+    // idempotent bootstrap (admin)
+    seed: (body) => req("seed", "POST", body || {}),
+    // client-side convenience: cached me() + local wildcard eval (UX gating only;
+    // enforce real access in edge functions via check()).
+    hasPermission: async (key, opts = {}) => {
+      const info = await me(opts);
+      if (info && info.isAdmin) return true;
+      const perms = (info && info.permissions) || [];
+      return perms.some((g) => matches(g, key));
+    },
+    refresh: () => {
+      mePromise = null;
+    },
+  };
+}
+
+// =============================================================
 // Root createClient
 // =============================================================
 export function createClient(config) {
@@ -602,6 +866,7 @@ export function createClient(config) {
     entities: createEntities(http),
     integrations: createIntegrations(http),
     functions: createFunctions(httpFunctions),
+    rbac: createRbac(httpFunctions),
     auth: createAuth(http, config),
     setToken: (t) => http.setToken(t, true),
     getConfig: () => ({ serverUrl: config.serverUrl }),
