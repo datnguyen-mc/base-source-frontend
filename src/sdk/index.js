@@ -76,7 +76,7 @@ function createHttp(cfg) {
       ? localStorage.getItem(storageKey) ?? undefined
       : undefined);
 
-  const setToken = (t, save) => {
+  const setToken = (t, save = true) => {
     token = t;
     if (typeof window !== "undefined" && save) {
       if (t) localStorage.setItem(storageKey, t);
@@ -122,6 +122,8 @@ function createHttp(cfg) {
           ...(typeof window !== "undefined" ? { "Accept-Language": getRequestLang() } : {}),
           // Add timezone offset header
           ...(typeof window !== "undefined" ? { "x-timezone-offset": String(-(new Date().getTimezoneOffset())) } : {}),
+          // Add X-App-Id header if configured
+          ...(cfg.appId ? { "X-App-Id": cfg.appId } : {}),
         },
       });
     } catch {
@@ -566,8 +568,9 @@ function createAuth(http, cfg) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(args[0] ?? {}),
               });
-              if (res?.data.data.token) localStorage.setItem("access_token", res.data.data.token);
-              if (res?.data.data.user) localStorage.setItem("user", JSON.stringify(res.data.data.user));
+              const data = res?.data?.data || res?.data || res;
+              if (data?.token) localStorage.setItem("access_token", data.token);
+              if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
               return res;
             }
 
@@ -582,8 +585,9 @@ function createAuth(http, cfg) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
               });
-              if (res?.data?.data?.token) localStorage.setItem("access_token", res.data.data.token);
-              if (res?.data?.data?.user) localStorage.setItem("user", JSON.stringify(res.data.data.user));
+              const data = res?.data?.data || res?.data || res;
+              if (data?.token) localStorage.setItem("access_token", data.token);
+              if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
               return res;
             }
 
@@ -653,6 +657,219 @@ function createAuth(http, cfg) {
 
             case "setToken":
               return http.setToken(args[0], args[1]);
+
+            case "loginWithSocial": {
+              const provider = args[0];
+              const options = args[1] ?? {};
+              if (typeof window === "undefined") return;
+
+              // 1. Nhận diện Platform Domain thông minh để redirect Google (Sử dụng window.location.origin để tự động hỗ trợ localhost, preview và custom domains)
+              const platformDomain = window.location.origin;
+
+              // 2. Xử lý Google OAuth
+              if (provider === "google") {
+                const googleClientId = cfg.appId;
+                const redirectUri = `${platformDomain}/oauth/google`;
+                const state = JSON.stringify({
+                  domain: window.location.origin,
+                  from_url: window.location.href,
+                });
+                const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(
+                  redirectUri
+                )}&response_type=token&scope=openid+email+profile&prompt=select_account&include_granted_scopes=true&state=${encodeURIComponent(
+                  state
+                )}`;
+                window.location.href = googleOAuthUrl;
+                return;
+              }
+
+              // 3. Xử lý các provider khác qua Gateway
+              const callbackUri = options.callbackUri || "/auth/callback";
+              let gatewayBaseUrl = cfg.authServerUrl;
+              if (gatewayBaseUrl) {
+                gatewayBaseUrl = `${gatewayBaseUrl}/auth`;
+              } else {
+                gatewayBaseUrl = "https://stg.vibe-x.app/api/modules/auth";
+              }
+              window.location.href = `${gatewayBaseUrl}/login/${provider}?appId=${cfg.appId}&redirectUri=${encodeURIComponent(
+                callbackUri
+              )}`;
+              return;
+            }
+
+            case "handleSocialCallback": {
+              const provider = args[0];
+              const options = args[1] ?? {};
+              if (typeof window === "undefined") return { success: false, error: "Window is undefined" };
+
+              let finalToken = null;
+              let finalUser = null;
+
+              if (provider === "google") {
+                const hash = window.location.hash;
+                if (!hash) {
+                  throw new Error("Không tìm thấy thông tin xác thực từ Google trong URL.");
+                }
+
+                const params = new URLSearchParams(hash.substring(1));
+                const accessToken = params.get("access_token");
+                const errorMsg = params.get("error");
+
+                if (errorMsg) {
+                  throw new Error(`Lỗi từ Google: ${errorMsg}`);
+                }
+
+                if (!accessToken) {
+                  throw new Error("Không thể lấy được Access Token của tài khoản Google.");
+                }
+
+                // Lấy thông tin user từ Google
+                const googleUserRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                  },
+                });
+
+                if (!googleUserRes.ok) {
+                  throw new Error("Xác thực tài khoản Google thất bại, không thể lấy thông tin profile.");
+                }
+
+                const googleUser = await googleUserRes.json();
+                const { email, name, picture, sub } = googleUser;
+
+                if (!email) {
+                  throw new Error("Không thể lấy được địa chỉ email từ tài khoản Google.");
+                }
+
+                // Step 1: Register-First
+                let registerData = null;
+                let registerRes = null;
+                try {
+                  registerRes = await fetch(`${http.getConfig().serverUrl}/auth/register`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      email: email,
+                      password: sub,
+                      name: name || email.split("@")[0],
+                      avatar: picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+                      metadata: {
+                        googleSub: sub,
+                        provider: "google",
+                      },
+                    }),
+                  });
+                  registerData = await registerRes.json();
+                } catch (regErr) {
+                  console.warn("[SDK Auth] Gọi API register gặp lỗi kết nối:", regErr);
+                }
+
+                const isRegisterSuccess =
+                  registerRes &&
+                  registerRes.ok &&
+                  (registerData?.success === true || registerData?.data?.success === true);
+
+                if (isRegisterSuccess) {
+                  if (registerData?.data?.success === true) {
+                    finalToken = registerData?.data?.data?.token || registerData?.data?.token;
+                    finalUser = registerData?.data?.data?.user || registerData?.data?.user;
+                  } else {
+                    finalToken = registerData?.data?.token || registerData?.token;
+                    finalUser = registerData?.data?.user || registerData?.user;
+                  }
+                } else {
+                  // Step 2: Fallback to Login
+                  const errorMessage = registerData?.data?.message || registerData?.message || "";
+                  const isUserAlreadyExists =
+                    registerRes?.status === 401 ||
+                    errorMessage.toLowerCase().includes("already exists") ||
+                    errorMessage.toLowerCase().includes("tồn tại");
+
+                  if (isUserAlreadyExists) {
+                    const loginRes = await fetch(`${http.getConfig().serverUrl}/auth/login`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        email: email,
+                        password: sub,
+                      }),
+                    });
+
+                    const loginResData = await loginRes.json();
+                    const isLoginSuccess =
+                      loginRes.ok &&
+                      (loginResData?.success === true || loginResData?.data?.success === true);
+
+                    if (isLoginSuccess) {
+                      if (loginResData?.data?.success === true) {
+                        finalToken = loginResData?.data?.data?.token || loginResData?.data?.token;
+                        finalUser = loginResData?.data?.data?.user || loginResData?.data?.user;
+                      } else {
+                        finalToken = loginResData?.data?.token || loginResData?.token;
+                        finalUser = loginResData?.data?.user || loginResData?.user;
+                      }
+                    } else {
+                      throw new Error(loginResData?.data?.message || loginResData?.message || "Đăng nhập tài khoản thất bại.");
+                    }
+                  } else {
+                    throw new Error(errorMessage || "Đăng ký tài khoản tự động thất bại.");
+                  }
+                }
+              } else {
+                // Các provider khác
+                const searchParams = new URLSearchParams(window.location.search);
+                const token = searchParams.get("token");
+                const googleAccessToken = searchParams.get("google_access_token");
+                const errorMsg = searchParams.get("error");
+
+                if (errorMsg) {
+                  throw new Error(errorMsg);
+                }
+
+                finalToken = token;
+
+                if (googleAccessToken) {
+                  const loginRes = await http.request("auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      provider_type: "google",
+                      provider_token: googleAccessToken,
+                    }),
+                  });
+                  const loginData = loginRes?.data?.data || loginRes?.data || loginRes;
+                  if (loginData?.token) {
+                    finalToken = loginData.token;
+                  } else {
+                    throw new Error("Xác thực tài khoản qua Gateway thất bại.");
+                  }
+                }
+
+                if (!finalToken) {
+                  throw new Error("Không nhận được phiên xác thực JWT từ hệ thống.");
+                }
+
+                http.setToken(finalToken, true);
+                const meRes = await http.request("auth/me", { method: "GET" });
+                finalUser = meRes?.data?.data || meRes?.data || meRes;
+              }
+
+              if (!finalToken) {
+                throw new Error("Không lấy được phiên đăng nhập JWT.");
+              }
+
+              http.setToken(finalToken, true);
+              localStorage.setItem("access_token", finalToken);
+              if (finalUser) {
+                localStorage.setItem("user", JSON.stringify(finalUser));
+              }
+
+              return { success: true, token: finalToken, user: finalUser };
+            }
 
             default:
               return http.request(`auth/${name}`, {
@@ -862,14 +1079,32 @@ export function createClient(config) {
     serverUrl: config.serverUrl.replace(/\/entities\/?$/, ""),
   });
 
+  let authServerUrl = config.serverUrl;
+  if (authServerUrl.includes('/entities')) {
+    authServerUrl = authServerUrl.replace(/\/entities\/?$/, ''); // remove /entities
+    authServerUrl = authServerUrl.replace(/\/v1\/[^/]+$/, '/v1/api/modules'); // replace /v1/{projectKey} with /v1/api/modules
+  } else {
+    // fallback
+    authServerUrl = authServerUrl.replace(/\/entities\/?$/, '') + '/api/modules';
+  }
+
+  const httpAuth = createHttp({
+    ...config,
+    serverUrl: authServerUrl,
+  });
+
   const client = {
     entities: createEntities(http),
     integrations: createIntegrations(http),
     functions: createFunctions(httpFunctions),
     rbac: createRbac(httpFunctions),
     auth: createAuth(http, config),
-    setToken: (t) => http.setToken(t, true),
-    getConfig: () => ({ serverUrl: config.serverUrl }),
+    setToken: (t) => {
+      http.setToken(t, true);
+      httpAuth.setToken(t, true);
+      httpFunctions.setToken(t, true);
+    },
+    getConfig: () => ({ serverUrl: config.serverUrl, appId: config.appId, authServerUrl }),
   };
 
   // dynamic modules
