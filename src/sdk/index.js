@@ -160,7 +160,10 @@ function createHttp(cfg) {
 
       throw {
         name: "vibexClientError",
-        message: "Unauthorized",
+        // Surface the SERVER's message (e.g. "Invalid email or password" on a
+        // failed login) instead of a generic "Unauthorized", so the app can
+        // show the real reason via `err.message`.
+        message: data?.message || data?.title || "Unauthorized",
         status: res.status,
         data,
       };
@@ -271,16 +274,23 @@ function createEntities(http) {
               return async (...args) => {
                 switch (method) {
                   case "list":
-                    return http.request(`${entity}`, {
+                    // GET /<entity>/list — returns an ARRAY. Pass
+                    // { filter, sort, limit, page, fields }; filter/sort are
+                    // JSON-encoded (server whitelists filter keys to real
+                    // schema fields) and the entity read-policy is enforced.
+                    return http.request(`${entity}/list`, {
                       method: "GET",
                       query: clean({
-                        query: clean({
-                          filter: 1,
-                          sort: 1,
-                          limit: args[0]?.limit,
-                          skip: args[0]?.skip,
-                          fields: arrToCsv(args[0]?.fields),
-                        }),
+                        filter: args[0]?.filter
+                          ? JSON.stringify(args[0].filter)
+                          : undefined,
+                        sort: args[0]?.sort
+                          ? JSON.stringify(args[0].sort)
+                          : undefined,
+                        limit: args[0]?.limit,
+                        page: args[0]?.page,
+                        fields: arrToCsv(args[0]?.fields),
+                        populate: args[0]?.populate === false ? undefined : 1,
                       }),
                     });
 
@@ -293,13 +303,17 @@ function createEntities(http) {
                         filter: args[0]?.filter ? JSON.stringify(args[0].filter) : undefined,
                         sort: args[0]?.sort ? JSON.stringify(args[0].sort) : undefined,
                         fields: arrToCsv(args[0]?.fields),
+                        populate: args[0]?.populate === false ? undefined : 1,
                       }),
                     });
 
                   case "get":
                     return http.request(
                       `${entity}/${encodeURIComponent(args[0])}/get`,
-                      { method: "GET" }
+                      {
+                        method: "GET",
+                        query: clean({ populate: args[1]?.populate === false ? undefined : 1 }),
+                      }
                     );
 
                   case "create": {
@@ -350,6 +364,130 @@ function createEntities(http) {
                   case "delete":
                     return http.request(`${entity}/${args[0]}/delete`, {
                       method: "GET",
+                    });
+
+                  // NOTE: the client `increment` op was REMOVED. Counters
+                  // (like/comment/view) are NOT bumped from the client — they are
+                  // derived SERVER-SIDE by a TRIGGER from a policy-gated source
+                  // row (e.g. a `Like`), so a `counter:true` field can never be
+                  // written or spammed by the client.
+
+                  // Fetch one record by id (alias of get()).
+                  // Usage: entities.Post.findById(id) -> record | null
+                  case "findById":
+                    return http.request(
+                      `${entity}/${encodeURIComponent(args[0])}/get`,
+                      {
+                        method: "GET",
+                        query: clean({ populate: args[1]?.populate === false ? undefined : 1 }),
+                      }
+                    );
+
+                  // Find records where <field> === <value>.
+                  // Usage: entities.User.findByField("email", "a@b.com")
+                  //        entities.Order.findByField("status", "paid", { sort: { created_at: -1 }, limit: 20 })
+                  // Returns an ARRAY. The field must be a real schema field
+                  // (server whitelists filter keys); the entity read-policy is
+                  // enforced (owner-scope + read-mask), so you only get rows you
+                  // may read.
+                  case "findByField": {
+                    const field = args[0];
+                    const value = args[1];
+                    const opts = args[2] || {};
+                    return http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify({ [field]: value }),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: opts.limit,
+                        page: opts.page,
+                        fields: arrToCsv(opts.fields),
+                        populate: opts.populate === false ? undefined : 1,
+                      }),
+                    });
+                  }
+
+                  // Find the FIRST record where <field> === <value>, or null.
+                  // Usage: const u = await entities.User.findOneByField("email", email)
+                  case "findOneByField": {
+                    const field = args[0];
+                    const value = args[1];
+                    const res = await http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify({ [field]: value }),
+                        limit: 1,
+                        populate: 1,
+                      }),
+                    });
+                    const arr = Array.isArray(res) ? res : (res?.data ?? []);
+                    return arr.length ? arr[0] : null;
+                  }
+
+                  // Find records matching MULTIPLE conditions (ANDed).
+                  // Usage: entities.Order.findByFields({ userId, status: "paid" })
+                  //        entities.Order.findByFields({ status: "paid" }, { sort: { created_at: -1 }, limit: 50 })
+                  // Returns an ARRAY. Filter keys must be real schema fields
+                  // (server whitelists them) and the read-policy is enforced.
+                  case "findByFields": {
+                    const filter = args[0] || {};
+                    const opts = args[1] || {};
+                    return http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify(filter),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: opts.limit,
+                        page: opts.page,
+                        fields: arrToCsv(opts.fields),
+                        populate: opts.populate === false ? undefined : 1,
+                      }),
+                    });
+                  }
+
+                  // Find the FIRST record matching a general filter object, or null.
+                  // Usage: const o = await entities.Order.findOne({ userId, status: "pending" })
+                  case "findOne": {
+                    const filter = args[0] || {};
+                    const opts = args[1] || {};
+                    const res = await http.request(`${entity}/list`, {
+                      method: "GET",
+                      query: clean({
+                        filter: JSON.stringify(filter),
+                        sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
+                        limit: 1,
+                        populate: 1,
+                      }),
+                    });
+                    const arr = Array.isArray(res) ? res : (res?.data ?? []);
+                    return arr.length ? arr[0] : null;
+                  }
+
+                  // ---- Bulk ops (each row/id is policy-enforced server-side) ----
+                  // entities.Product.createMany([{...}, {...}])
+                  case "createMany":
+                    return http.request(`${entity}/createMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ items: args[0] || [] }),
+                    });
+
+                  // Create-or-update by id: items WITH an existing id → update,
+                  // else → create. entities.Product.upsertMany([{ id, ... }, {...}])
+                  case "upsertMany":
+                    return http.request(`${entity}/upsertMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ items: args[0] || [] }),
+                    });
+
+                  // Delete a list of ids (each ownership-checked; foreign ids are
+                  // skipped). entities.Product.deleteMany([id1, id2, ...])
+                  case "deleteMany":
+                    return http.request(`${entity}/deleteMany`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ ids: args[0] || [] }),
                     });
 
                   default:
@@ -495,6 +633,20 @@ function createAuth(http, cfg) {
               });
 
             case "logout":
+              // Server-side session invalidation FIRST: ask the backend to
+              // revoke this token (Redis denylist) so it can no longer be used
+              // even before it expires. The current token is still set, so
+              // http.request() attaches it as the Bearer credential to revoke.
+              // Best-effort: a network/API error must NOT trap the user in a
+              // logged-in state, so we always clear locally afterwards.
+              try {
+                await http.request("auth/logout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                });
+              } catch (_) {
+                // ignore — proceed to clear local session regardless
+              }
               http.setToken(undefined, true);
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
@@ -850,17 +1002,36 @@ function createRbac(http) {
     createRole: (body) => req("roles", "POST", body),
     updateRole: (id, body) => req(`roles/${enc(id)}`, "PUT", body),
     deleteRole: (id) => req(`roles/${enc(id)}`, "DELETE"),
-    getRolePermissions: (roleId) => req(`roles/${enc(roleId)}/permissions`),
-    setRolePermissions: (roleId, permissionKeys) =>
+    // Returns a flat ARRAY of the role's permission KEYS (string[]) — kept for
+    // display + the legacy key-based editor. (Endpoint responds
+    // `{ roleId, role, permissions, permissionIds }`; we unwrap to `permissions`.)
+    getRolePermissions: (roleId) =>
+      req(`roles/${enc(roleId)}/permissions`).then((r) =>
+        Array.isArray(r) ? r : (r && r.permissions) || []
+      ),
+    // Returns a flat ARRAY of the role's permission IDS (string[]) — the
+    // AUTHORITATIVE set. Use this to pre-check the role editor BY ID (like the
+    // console FE): `ids.map(String).includes(String(permission.id))`.
+    getRolePermissionIds: (roleId) =>
+      req(`roles/${enc(roleId)}/permissions`).then((r) =>
+        Array.isArray(r) ? [] : (r && r.permissionIds) || []
+      ),
+    // Save a role's permissions BY ID (console-style). Accepts permission IDS
+    // (preferred, authoritative) or keys — the backend resolves each ref and
+    // stores the map keyed by permissionId.
+    setRolePermissions: (roleId, permissionIds) =>
       req(`roles/${enc(roleId)}/permissions`, "PUT", {
-        permissionKeys: permissionKeys || [],
+        permissionIds: permissionIds || [],
       }),
     // permissions
     listPermissions: () => req("permissions"),
     createPermission: (body) => req("permissions", "POST", body),
     updatePermission: (id, body) => req(`permissions/${enc(id)}`, "PUT", body),
     deletePermission: (id) => req(`permissions/${enc(id)}`, "DELETE"),
-    // users
+    // users — a user may hold MANY roles (many-to-many via UserRole)
+    assignRoles: (userId, roleNames) =>
+      req(`users/${enc(userId)}/roles`, "PUT", { roles: roleNames || [] }),
+    // back-compat single-role assign (replaces the user's roles with [roleName])
     assignRole: (userId, roleName) =>
       req(`users/${enc(userId)}/role`, "POST", { role: roleName }),
     // menus
