@@ -11,6 +11,30 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  Sparkles,
+  MessageSquare,
+  Image as ImageIcon,
+  Video,
+  Music,
+  AudioLines,
+  Languages,
+  Loader2,
+  Check,
+  AlertCircle,
+  ShieldAlert,
+  Info,
+} from "lucide-react";
 import { cn } from "@/lib/coreUtils";
 
 /**
@@ -39,13 +63,92 @@ const TOKEN_KEY = "access_token";
 // The base registers the standalone admin login route at this path (App.jsx).
 const ADMIN_LOGIN_PATH = "/admin/login";
 
+// Per-feature icon + accent so each module tab/panel is visually distinct.
+const FEATURE_META = {
+  chat: { icon: MessageSquare, label: "Chat", tint: "text-blue-600 dark:text-blue-400", soft: "bg-blue-500/10" },
+  image: { icon: ImageIcon, label: "Image", tint: "text-violet-600 dark:text-violet-400", soft: "bg-violet-500/10" },
+  video: { icon: Video, label: "Video", tint: "text-rose-600 dark:text-rose-400", soft: "bg-rose-500/10" },
+  audio: { icon: Music, label: "Audio", tint: "text-amber-600 dark:text-amber-400", soft: "bg-amber-500/10" },
+  sfx: { icon: AudioLines, label: "SFX", tint: "text-emerald-600 dark:text-emerald-400", soft: "bg-emerald-500/10" },
+  translate: { icon: Languages, label: "Translate", tint: "text-cyan-600 dark:text-cyan-400", soft: "bg-cyan-500/10" },
+};
+
+function featureMeta(feature) {
+  return (
+    FEATURE_META[feature] || {
+      icon: Sparkles,
+      label: feature || "AIFlow",
+      tint: "text-muted-foreground",
+      soft: "bg-muted",
+    }
+  );
+}
+
 function moduleLabel(module) {
   return module?.useCaseName || module?.title || module?.feature || "AIFlow module";
+}
+
+// Tooltip shown on hovering a module's tab — auto-derived from the module
+// (full name + feature/use-case), useful when the tab label is truncated.
+function moduleTooltip(module) {
+  const parts = [moduleLabel(module)];
+  if (module?.feature) {
+    parts.push(
+      module.useCase && module.useCase !== "default"
+        ? `${module.feature} · ${module.useCase}`
+        : module.feature
+    );
+  }
+  return parts.join(" — ");
 }
 
 function errorStatus(err) {
   // SDK throws a plain object with a numeric `status`; be defensive about shape.
   return err?.status ?? err?.data?.status ?? err?.response?.status;
+}
+
+/**
+ * Derive a clean "{label} ({provider})" display from a raw model id — mirrors the
+ * platform builder's Integrations tab so the admin sees the same friendly form
+ * (e.g. "Claude Opus 4.8" · Anthropic) instead of the raw id ("claude-opus-4-8").
+ *
+ * The model IDs themselves are HYPHENATED (claude-opus-4-8) — the version has no
+ * decimal in the ID. For DISPLAY we render the version number with a decimal
+ * point: a hyphen between two digits (`4-8`, `3-5`) becomes `4.8` / `3.5`, while
+ * word-separating hyphens become spaces.
+ */
+function parseModelId(id) {
+  const lower = (id || "").toLowerCase();
+  let provider = "AI";
+  if (lower.startsWith("claude") || lower.startsWith("anthropic"))
+    provider = "Anthropic";
+  else if (
+    lower.startsWith("gpt") ||
+    lower.startsWith("o1") ||
+    lower.startsWith("o3") ||
+    lower.startsWith("o4")
+  )
+    provider = "OpenAI";
+  else if (
+    lower.startsWith("gemini") ||
+    lower.startsWith("google") ||
+    lower.startsWith("veo")
+  )
+    provider = "Google";
+
+  const label = (id || "")
+    // Version hyphen between two digits → decimal point (4-8 → 4.8, 3-5 → 3.5).
+    .replace(/(\d)-(\d)/g, "$1.$2")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/Gpt/g, "GPT")
+    .replace(/\bO3\b/gi, "O3")
+    .replace(/\bO4\b/gi, "O4")
+    .replace(/\bpreview\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return { value: id, label: label || id, provider };
 }
 
 export default function AIFlowSettings() {
@@ -59,10 +162,9 @@ export default function AIFlowSettings() {
   // Per-module editable state, keyed by moduleId.
   const [drafts, setDrafts] = useState({}); // { [moduleId]: { systemPrompt, model } }
   const [saving, setSaving] = useState({}); // { [moduleId]: boolean }
-  const [status, setStatus] = useState({}); // { [moduleId]: { type: 'success'|'error', message } }
+  const [status, setStatus] = useState({}); // { [moduleId]: { type, message } }
 
   const redirectToLogin = () => {
-    // Match how the base handles an expired/invalid admin session.
     try {
       localStorage.removeItem(TOKEN_KEY);
     } catch (_) {
@@ -150,7 +252,6 @@ export default function AIFlowSettings() {
       ...prev,
       [moduleId]: { ...prev[moduleId], ...patch },
     }));
-    // Clear any prior status once the admin starts editing again.
     setStatus((prev) => (prev[moduleId] ? { ...prev, [moduleId]: null } : prev));
   };
 
@@ -164,10 +265,7 @@ export default function AIFlowSettings() {
     setStatus((prev) => ({ ...prev, [moduleId]: null }));
 
     try {
-      const payload = {
-        moduleId,
-        systemPrompt: draft.systemPrompt,
-      };
+      const payload = { moduleId, systemPrompt: draft.systemPrompt };
       if (module.feature) {
         payload.defaults = { [module.feature]: draft.model };
       }
@@ -196,164 +294,284 @@ export default function AIFlowSettings() {
         st === 403
           ? "Admin permission required"
           : err?.message || "Failed to save changes";
-      setStatus((prev) => ({
-        ...prev,
-        [moduleId]: { type: "error", message },
-      }));
+      setStatus((prev) => ({ ...prev, [moduleId]: { type: "error", message } }));
     } finally {
       setSaving((prev) => ({ ...prev, [moduleId]: false }));
     }
   };
 
+  // ---- shared page shell ---------------------------------------------------
+
+  const PageShell = ({ children }) => (
+    <div className="min-h-full bg-gradient-to-b from-muted/40 to-transparent">
+      <div className="w-full p-6 sm:p-8">
+        <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/10">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight">AIFlow Settings</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Manage the system prompt and default model for each AI feature — changes apply instantly, no redeploy.
+            </p>
+          </div>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+
   // ---- render states -------------------------------------------------------
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <div className="w-5 h-5 border-2 border-muted border-t-foreground rounded-full animate-spin" />
-          <span>Loading AIFlow modules…</span>
-        </div>
-      </div>
+      <PageShell>
+        <Card className="border-dashed">
+          <CardContent className="flex items-center gap-3 py-10 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Loading AIFlow modules…</span>
+          </CardContent>
+        </Card>
+      </PageShell>
     );
   }
 
   if (loadError) {
+    const forbidden = loadError.type === "forbidden";
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold tracking-tight mb-1">AIFlow Settings</h1>
-        <Card className="mt-4 border-destructive/40">
-          <CardHeader>
-            <CardTitle className="text-destructive">
-              {loadError.type === "forbidden"
-                ? "Admin permission required"
-                : "Something went wrong"}
-            </CardTitle>
-            <CardDescription>{loadError.message}</CardDescription>
-          </CardHeader>
+      <PageShell>
+        <Card className="border-destructive/40">
+          <CardContent className="flex items-start gap-3 py-8">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+            </div>
+            <div>
+              <p className="font-medium text-destructive">
+                {forbidden ? "Admin permission required" : "Something went wrong"}
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">{loadError.message}</p>
+            </div>
+          </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
   if (!modules.length) {
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold tracking-tight mb-1">AIFlow Settings</h1>
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle>AIFlow is not enabled for this app</CardTitle>
-            <CardDescription>
-              There are no AIFlow modules to configure. Enable AIFlow for this app to
-              manage system prompts and default models here.
-            </CardDescription>
-          </CardHeader>
+      <PageShell>
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Sparkles className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-medium">AIFlow is not enabled for this app</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                There are no AI modules to configure yet. Enable AIFlow for this app to
+                manage system prompts and default models here.
+              </p>
+            </div>
+          </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
-  return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">AIFlow Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Edit each AIFlow module's system prompt and default model.
-        </p>
-      </div>
+  // ---- module panel (rendered inside each tab) -----------------------------
 
-      <div className="space-y-6">
-        {modules.map((module) => {
-          const moduleId = module.moduleId;
-          const draft = drafts[moduleId] ?? seedDraft(module);
-          const isSaving = !!saving[moduleId];
-          const st = status[moduleId];
-          const models = Array.isArray(module.models) ? module.models : [];
+  const renderPanel = (module) => {
+    const moduleId = module.moduleId;
+    const draft = drafts[moduleId] ?? seedDraft(module);
+    const isSaving = !!saving[moduleId];
+    const st = status[moduleId];
+    const models = Array.isArray(module.models) ? module.models : [];
+    const modelOptions = models.map(parseModelId);
+    const selectedModelInfo = draft.model
+      ? modelOptions.find((o) => o.value === draft.model) ||
+        parseModelId(draft.model)
+      : null;
+    const meta = featureMeta(module.feature);
+    const Icon = meta.icon;
+    const singleModel = models.length <= 1;
+    const currentOffList = draft.model && !models.includes(draft.model);
+    const promptLen = (draft.systemPrompt || "").length;
 
-          return (
-            <Card key={moduleId ?? moduleLabel(module)}>
-              <CardHeader>
-                <CardTitle>{moduleLabel(module)}</CardTitle>
-                <CardDescription>
-                  {module.feature ? (
-                    <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
-                      {module.feature}
-                    </span>
-                  ) : (
-                    "Module"
-                  )}
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`prompt-${moduleId}`}>System prompt</Label>
-                  <Textarea
-                    id={`prompt-${moduleId}`}
-                    className="min-h-[140px] font-mono text-sm"
-                    value={draft.systemPrompt}
-                    placeholder="Enter the system prompt for this module…"
-                    onChange={(e) =>
-                      updateDraft(moduleId, { systemPrompt: e.target.value })
-                    }
-                    disabled={isSaving}
-                  />
-                </div>
-
-                {module.feature && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`model-${moduleId}`}>Default model</Label>
-                    <select
-                      id={`model-${moduleId}`}
-                      className={cn(
-                        "flex h-9 w-full items-center justify-between rounded-md border border-input",
-                        "bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background",
-                        "focus:outline-none focus:ring-1 focus:ring-ring",
-                        "disabled:cursor-not-allowed disabled:opacity-50"
-                      )}
-                      value={draft.model}
-                      onChange={(e) => updateDraft(moduleId, { model: e.target.value })}
-                      disabled={isSaving || models.length <= 1}
-                    >
-                      {/* Keep the current value selectable even if not in models[]. */}
-                      {draft.model && !models.includes(draft.model) && (
-                        <option value={draft.model}>{draft.model}</option>
-                      )}
-                      {!models.length && <option value="">No models available</option>}
-                      {models.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    {models.length === 1 && (
-                      <p className="text-xs text-muted-foreground">
-                        Only one model is available for this feature.
-                      </p>
-                    )}
-                  </div>
+    return (
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="gap-2">
+          <div className="flex items-center gap-3">
+            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", meta.soft)}>
+              <Icon className={cn("h-5 w-5", meta.tint)} />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="truncate" title={moduleTooltip(module)}>
+                {moduleLabel(module)}
+              </CardTitle>
+              <CardDescription className="mt-1 flex flex-wrap items-center gap-1.5">
+                <Badge variant="secondary" className="gap-1 font-normal">
+                  <Icon className={cn("h-3 w-3", meta.tint)} />
+                  {meta.label}
+                </Badge>
+                {module.useCase && module.useCase !== "default" && (
+                  <Badge variant="outline" className="font-normal">
+                    {module.useCase}
+                  </Badge>
                 )}
-              </CardContent>
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
 
-              <CardFooter className="flex items-center gap-3">
-                <Button onClick={() => handleSave(module)} disabled={isSaving}>
-                  {isSaving ? "Saving…" : "Save"}
-                </Button>
-                {st && (
-                  <span
-                    className={cn(
-                      "text-sm",
-                      st.type === "success" ? "text-green-600" : "text-destructive"
-                    )}
+        <Separator />
+
+        <CardContent className="space-y-5 pt-6">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor={`prompt-${moduleId}`} className="text-sm font-medium">
+                System prompt
+              </Label>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {promptLen} chars
+              </span>
+            </div>
+            <Textarea
+              id={`prompt-${moduleId}`}
+              className="min-h-[160px] resize-y font-mono text-sm leading-relaxed"
+              value={draft.systemPrompt}
+              placeholder="Describe how this AI feature should behave…"
+              onChange={(e) => updateDraft(moduleId, { systemPrompt: e.target.value })}
+              disabled={isSaving}
+            />
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5" />
+              Sets the instructions this feature follows on every request.
+            </p>
+          </div>
+
+          {module.feature && (
+            <div className="space-y-2">
+              <Label htmlFor={`model-${moduleId}`} className="text-sm font-medium">
+                Default model
+              </Label>
+              {models.length ? (
+                <>
+                  <Select
+                    value={draft.model || undefined}
+                    onValueChange={(v) => updateDraft(moduleId, { model: v })}
+                    disabled={isSaving || singleModel}
                   >
-                    {st.message}
-                  </span>
-                )}
-              </CardFooter>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
+                    <SelectTrigger id={`model-${moduleId}`} className="w-full">
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentOffList && (
+                        <SelectItem value={draft.model}>
+                          {parseModelId(draft.model).label} (
+                          {parseModelId(draft.model).provider}) — current
+                        </SelectItem>
+                      )}
+                      {modelOptions.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label} ({m.provider})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedModelInfo && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] font-bold uppercase tracking-wider"
+                      >
+                        {selectedModelInfo.provider}
+                      </Badge>
+                      <span className="text-[11px] text-muted-foreground">
+                        {selectedModelInfo.value}
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  No models available for this feature.
+                </p>
+              )}
+              {singleModel && models.length === 1 && (
+                <p className="text-xs text-muted-foreground">
+                  Only one model is available for this feature.
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+
+        <CardFooter className="flex items-center gap-3 border-t bg-muted/30 py-4">
+          <Button onClick={() => handleSave(module)} disabled={isSaving} className="gap-2">
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save changes"
+            )}
+          </Button>
+          {st && (
+            <span
+              className={cn(
+                "flex items-center gap-1.5 text-sm",
+                st.type === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+              )}
+            >
+              {st.type === "success" ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <AlertCircle className="h-4 w-4" />
+              )}
+              {st.message}
+            </span>
+          )}
+        </CardFooter>
+      </Card>
+    );
+  };
+
+  // ---- main (tabs) ---------------------------------------------------------
+
+  return (
+    <PageShell>
+      <Tabs defaultValue={String(modules[0].moduleId)} className="w-full">
+        {/* One tab per AIFlow module. Label auto from the module; hovering shows
+            a title tooltip (feature/use-case). Wraps to multiple rows when many. */}
+        <TabsList className="mb-4 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1">
+          {modules.map((module) => {
+            const meta = featureMeta(module.feature);
+            const Icon = meta.icon;
+            return (
+              <TabsTrigger
+                key={module.moduleId}
+                value={String(module.moduleId)}
+                title={moduleTooltip(module)}
+                className="gap-1.5 data-[state=active]:shadow-sm"
+              >
+                <Icon className={cn("h-3.5 w-3.5", meta.tint)} />
+                <span className="max-w-[160px] truncate">{moduleLabel(module)}</span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        {modules.map((module) => (
+          <TabsContent
+            key={module.moduleId}
+            value={String(module.moduleId)}
+            className="mt-0 focus-visible:outline-none"
+          >
+            {renderPanel(module)}
+          </TabsContent>
+        ))}
+      </Tabs>
+    </PageShell>
   );
 }
