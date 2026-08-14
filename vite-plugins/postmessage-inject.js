@@ -48,6 +48,176 @@ export function postMessageInject() {
                   });
                 }
 
+                // =============== RETRY-BEFORE-REPORT (STALE MODULE GRAPH) ======
+                // The project source lives on an NFS volume, so the dev server
+                // watches it by POLLING (usePolling, interval 1000ms +
+                // awaitWriteFinish 800ms). When the backend writes a generation's
+                // files, Vite notices them file-by-file over one or more polling
+                // passes — it can hot-update an IMPORTER before it has noticed the
+                // module it imports from, and then serves the OLD cached transform
+                // of that dependency. The browser throws:
+                //
+                //   SyntaxError: The requested module '/src/x.jsx?t=…' does not
+                //                provide an export named 'Y'
+                //
+                // Nothing is wrong with the code — the file on disk is already
+                // correct, only Vite's view of it is stale, and it self-corrects a
+                // second later. Reporting this to the studio triggered a pointless
+                // auto-fix (and the LLM kept replying that the code is fine).
+                //
+                // So for this class of error: wait, reload the page (that is the
+                // only real recovery once a module failed to link), and only report
+                // it after RETRY_MAX failed attempts. The attempt streak lives in
+                // sessionStorage because each attempt is a page reload. It is a
+                // plain counter — NOT keyed by message — so alternating messages
+                // can never reset it into a reload loop.
+                var IMPORT_RETRY_DELAY_MS = 3000;
+                var IMPORT_RETRY_MAX = 3;
+                var IMPORT_RETRY_KEY = "__vibex_import_retry__";
+                var IMPORT_RETRY_TTL_MS = 60000;
+
+                var RETRYABLE_IMPORT_PATTERNS = [
+                  // Chrome / Firefox / Safari wordings of the same failure
+                  "does not provide an export named",
+                  "doesn't provide an export named",
+                  "failed to fetch dynamically imported module",
+                  "error loading dynamically imported module",
+                  "importing a module script failed",
+                  "failed to resolve import",
+                  "failed to reload",
+                ];
+
+                function isRetryableImportError(msg) {
+                  if (!msg) return false;
+                  var lower = String(msg).toLowerCase();
+                  if (
+                    lower.indexOf("importing binding name") !== -1 &&
+                    lower.indexOf("is not found") !== -1
+                  ) {
+                    return true; // Safari
+                  }
+                  return RETRYABLE_IMPORT_PATTERNS.some(function (p) {
+                    return lower.indexOf(p) !== -1;
+                  });
+                }
+
+                function readRetryState() {
+                  try {
+                    var raw = sessionStorage.getItem(IMPORT_RETRY_KEY);
+                    if (!raw) return null;
+                    var parsed = JSON.parse(raw);
+                    if (!parsed || typeof parsed.n !== "number") return null;
+                    if (Date.now() - (parsed.ts || 0) > IMPORT_RETRY_TTL_MS) return null;
+                    return parsed;
+                  } catch (e) {
+                    return null;
+                  }
+                }
+
+                function writeRetryState(n, key) {
+                  try {
+                    sessionStorage.setItem(
+                      IMPORT_RETRY_KEY,
+                      JSON.stringify({ n: n, ts: Date.now(), k: key || "" })
+                    );
+                  } catch (e) { /* private mode */ }
+                }
+
+                function clearRetryState() {
+                  try {
+                    sessionStorage.removeItem(IMPORT_RETRY_KEY);
+                  } catch (e) { /* private mode */ }
+                }
+
+                // "retry"     → swallowed, a reload is scheduled
+                // "exhausted" → retried IMPORT_RETRY_MAX times, report it for real
+                // "skip"      → not this class of error, caller keeps its behaviour
+                function handleImportError(msg, payload) {
+                  if (!isRetryableImportError(msg)) return "skip";
+
+                  window.__VIBEX_LAST_IMPORT_ERROR_AT__ = Date.now();
+
+                  // A reload is already pending in this page life — every further
+                  // error is part of the same broken load.
+                  if (window.__VIBEX_RELOAD_SCHEDULED__) return "retry";
+
+                  var state = readRetryState();
+                  var attempts = state ? state.n : 0;
+
+                  if (attempts >= IMPORT_RETRY_MAX) {
+                    clearRetryState();
+                    return "exhausted";
+                  }
+
+                  attempts += 1;
+                  writeRetryState(attempts, String(msg).slice(0, 200));
+
+                  // Each attempt is a page reload, so the counter MUST survive it.
+                  // If sessionStorage is unavailable (privacy mode / partitioned
+                  // third-party storage) we would reload forever — so bail out and
+                  // let the studio-side gate, whose counter lives in a page that
+                  // never reloads, drive the retries instead.
+                  var persisted = readRetryState();
+                  if (!persisted || persisted.n !== attempts) {
+                    console.warn(
+                      "[Inject] cannot persist retry counter — deferring to the studio"
+                    );
+                    return "skip";
+                  }
+
+                  window.__VIBEX_RELOAD_SCHEDULED__ = true;
+
+                  // Tell the studio we are self-healing so it shows the loading
+                  // state instead of the crash overlay, and does not reload us too.
+                  window.parent?.postMessage(
+                    {
+                      type: "app_error_retry",
+                      attempt: attempts,
+                      max: IMPORT_RETRY_MAX,
+                      delay_ms: IMPORT_RETRY_DELAY_MS,
+                      error: {
+                        title: payload && payload.title ? String(payload.title) : "Static Import Error",
+                        details: String(msg),
+                        componentName: payload && payload.componentName ? String(payload.componentName) : null,
+                      },
+                    },
+                    "*"
+                  );
+
+                  console.warn(
+                    "[Inject] transient import error — reloading in " +
+                      IMPORT_RETRY_DELAY_MS +
+                      "ms (attempt " + attempts + "/" + IMPORT_RETRY_MAX + "): " +
+                      String(msg).slice(0, 200)
+                  );
+
+                  setTimeout(function () {
+                    try {
+                      window.location.reload();
+                    } catch (e) { /* ignore */ }
+                  }, IMPORT_RETRY_DELAY_MS);
+
+                  return "retry";
+                }
+
+                // A load that stays quiet ends the streak, so a later, unrelated
+                // incident starts again from attempt 1.
+                window.addEventListener("load", function () {
+                  setTimeout(function () {
+                    if (Date.now() - (window.__VIBEX_LAST_IMPORT_ERROR_AT__ || 0) > 4000) {
+                      clearRetryState();
+                    }
+                  }, 5000);
+                });
+
+                // Shared with src/lib/iframe-messaging.js and the patched Vite
+                // error overlay so all three report paths retry as one.
+                window.__VIBEX_IMPORT_RETRY__ = {
+                  version: 1,
+                  isRetryable: isRetryableImportError,
+                  handle: handleImportError,
+                };
+
                 // =============== UTIL ===============
                 function extractPathWithLine(stack) {
                   if (!stack) return null;
@@ -55,7 +225,7 @@ export function postMessageInject() {
                   return match ? match[0] : null;
                 }
 
-                function onAppError({ title, details, componentName }) {
+                function onAppError({ title, details, componentName }, isFinal) {
                   window.parent?.postMessage(
                     {
                       type: "app_error",
@@ -63,6 +233,9 @@ export function postMessageInject() {
                         title: title?.toString(),
                         details: details?.toString(),
                         componentName: componentName?.toString(),
+                        // Set once the retries above are used up: tells the studio
+                        // this one is real and must not be held back again.
+                        retry_exhausted: !!isFinal,
                       },
                     },
                     "*"
@@ -71,10 +244,22 @@ export function postMessageInject() {
 
                 // Runtime errors (window error / unhandled rejection) are the ones
                 // that wrongly fired auto-fix during hot reload. Gate them behind
-                // the suppression list + HMR quiet window before forwarding.
+                // the suppression list, the retry handler and the HMR quiet window
+                // before forwarding.
                 function onRuntimeError(payload) {
                   var msg = (payload && (payload.details || payload.title)) || "";
                   if (isSuppressed(msg)) return;
+
+                  // Retry FIRST: a stale-module-graph error must not be dropped by
+                  // the quiet window either — dropping it left the preview broken
+                  // with nothing reloading it.
+                  var verdict = handleImportError(msg, payload);
+                  if (verdict === "retry") return;
+                  if (verdict === "exhausted") {
+                    onAppError(payload, true);
+                    return;
+                  }
+
                   if (isHmrQuiet()) return;
                   onAppError(payload);
                 }
@@ -89,7 +274,7 @@ export function postMessageInject() {
 
                   onRuntimeError({
                     title,
-                    details: e.error?.toString(),
+                    details: e.error?.toString() || e.message,
                     componentName: shortPath,
                   });
                 }, true);
@@ -113,13 +298,17 @@ export function postMessageInject() {
                 console.error = function (...args) {
                   const msg = args.join(" ");
 
-                  // Static import errors surface transiently mid-HMR too — gate them.
-                  if (msg.includes("does not provide an export named") && !isHmrQuiet()) {
-                    onAppError({
+                  // Static import errors surface transiently mid-HMR too — retry
+                  // them and only report once the retries are exhausted.
+                  if (isRetryableImportError(msg)) {
+                    const payload = {
                       title: "Static Import Error",
                       details: msg,
                       componentName: null,
-                    });
+                    };
+                    if (handleImportError(msg, payload) === "exhausted") {
+                      onAppError(payload, true);
+                    }
                   }
 
                   originalConsoleError.apply(console, args);
@@ -152,12 +341,20 @@ export function postMessageInject() {
                         // but NOT during the quiet window (mid-update transient).
                         if (data.type === "error" && data.err && !isHmrQuiet()) {
                           const msg = data.err.msg || "Unknown HMR Error";
-
-                          onAppError({
+                          const payload = {
                             title: "HMR Import Error",
                             details: msg,
                             componentName: data.err.id || "hmr",
-                          });
+                          };
+
+                          // "Failed to resolve import …" from a half-seen write is
+                          // the same stale-graph race — retry before reporting.
+                          const verdict = handleImportError(msg, payload);
+                          if (verdict === "skip") {
+                            onAppError(payload);
+                          } else if (verdict === "exhausted") {
+                            onAppError(payload, true);
+                          }
                         }
 
                         // --- Catch full reload triggers ---

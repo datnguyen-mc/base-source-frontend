@@ -63,14 +63,106 @@ function isHmrQuiet() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// TRANSIENT IMPORT ERRORS ("does not provide an export named", failed dynamic
+// import, …) mean the module graph the browser holds is out of sync with the
+// files on disk — the dev server watches an NFS volume by polling, so it can
+// hot-update an importer before it has noticed the module it imports from.
+// Nothing is wrong with the code; a reload fixes it. `vite-plugins/postmessage-
+// inject.js` owns the retry logic in dev and publishes it on
+// window.__VIBEX_IMPORT_RETRY__; the fallback below covers the production build
+// (no injected script), where the same error shape appears when a deploy
+// replaced the chunks the open page still references.
+// ---------------------------------------------------------------------------
+const RETRYABLE_IMPORT_PATTERNS = [
+  "does not provide an export named",
+  "doesn't provide an export named",
+  "failed to fetch dynamically imported module",
+  "error loading dynamically imported module",
+  "importing a module script failed",
+];
+
+const IMPORT_RETRY_DELAY_MS = 3000;
+const IMPORT_RETRY_MAX = 3;
+const IMPORT_RETRY_KEY = "__vibex_import_retry__";
+const IMPORT_RETRY_TTL_MS = 60000;
+
+function isRetryableImportError(msg) {
+  if (!msg) return false;
+  const lower = String(msg).toLowerCase();
+  if (lower.includes("importing binding name") && lower.includes("is not found")) {
+    return true; // Safari wording
+  }
+  return RETRYABLE_IMPORT_PATTERNS.some((p) => lower.includes(p));
+}
+
+/** @returns {"retry"|"exhausted"|"skip"} */
+function fallbackHandleImportError(msg) {
+  if (!isRetryableImportError(msg)) return "skip";
+  if (window.__VIBEX_RELOAD_SCHEDULED__) return "retry";
+
+  let attempts = 0;
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(IMPORT_RETRY_KEY) || "null");
+    if (parsed && typeof parsed.n === "number" && Date.now() - (parsed.ts || 0) <= IMPORT_RETRY_TTL_MS) {
+      attempts = parsed.n;
+    }
+  } catch { /* storage blocked */ }
+
+  if (attempts >= IMPORT_RETRY_MAX) {
+    try { sessionStorage.removeItem(IMPORT_RETRY_KEY); } catch { /* empty */ }
+    return "exhausted";
+  }
+
+  attempts += 1;
+  // The counter must survive the reload it schedules — without it we would
+  // reload forever, so give up on retrying when storage is unavailable.
+  try {
+    sessionStorage.setItem(IMPORT_RETRY_KEY, JSON.stringify({ n: attempts, ts: Date.now() }));
+    const check = JSON.parse(sessionStorage.getItem(IMPORT_RETRY_KEY) || "null");
+    if (!check || check.n !== attempts) return "skip";
+  } catch {
+    return "skip";
+  }
+
+  window.__VIBEX_RELOAD_SCHEDULED__ = true;
+  window.parent?.postMessage(
+    {
+      type: "app_error_retry",
+      attempt: attempts,
+      max: IMPORT_RETRY_MAX,
+      delay_ms: IMPORT_RETRY_DELAY_MS,
+      error: { title: "Static Import Error", details: String(msg), componentName: null },
+    },
+    "*"
+  );
+  setTimeout(() => {
+    try { window.location.reload(); } catch { /* empty */ }
+  }, IMPORT_RETRY_DELAY_MS);
+
+  return "retry";
+}
+
+function handleImportError(msg) {
+  const shared = window.__VIBEX_IMPORT_RETRY__;
+  if (shared?.handle) return shared.handle(msg, null);
+  return fallbackHandleImportError(msg);
+}
+
 function onAppError({ title, details, componentName, originalError }) {
   if (originalError?.response?.status === 402) return;
 
   // Skip transient React null-hook errors (HMR / init race)
   if (isSuppressedError(originalError) || isSuppressedError({ toString: () => details })) return;
 
+  // Stale module graph → retry (reload) instead of reporting. Checked BEFORE the
+  // quiet window: dropping these silently used to leave the preview broken with
+  // nothing to recover it.
+  const verdict = handleImportError(details || title);
+  if (verdict === "retry") return;
+
   // Skip anything thrown while a hot update is settling
-  if (isHmrQuiet()) return;
+  if (verdict !== "exhausted" && isHmrQuiet()) return;
 
   window.parent?.postMessage(
     {
@@ -79,6 +171,8 @@ function onAppError({ title, details, componentName, originalError }) {
         title: title?.toString(),
         details: details?.toString(),
         componentName: componentName?.toString(),
+        // Retries used up — the studio must treat this one as real.
+        retry_exhausted: verdict === "exhausted",
       },
     },
     "*"
