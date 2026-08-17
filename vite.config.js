@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
               server.middlewares.use((req, res, next) => {
                 // Allow iframe embedding
                 res.setHeader('X-Frame-Options', 'ALLOWALL');
-                res.setHeader('Content-Security-Policy', "frame-ancestors *;");
+                res.setHeader('Content-Security-Policy', "frame-ancestors * https://localhost capacitor: app: file:;");
                 next();
               });
             }
