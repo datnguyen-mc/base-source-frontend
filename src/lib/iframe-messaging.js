@@ -149,16 +149,89 @@ function handleImportError(msg) {
   return fallbackHandleImportError(msg);
 }
 
+/**
+ * Turn ANY thrown/rejected value into readable text.
+ *
+ * `String(value)` / `value.toString()` is fine for an Error, but an unhandled
+ * promise rejection routinely carries a PLAIN OBJECT (a rejected fetch/axios
+ * response, `throw { code, message }`, …) whose toString() is the literal
+ * "[object Object]". The studio then displayed — and sent to the auto-fix AI —
+ * "1. [object Object] → [object Object] → Component: no-component", which is
+ * information-free yet still consumed one of the user's fix attempts.
+ */
+function toReadableText(value) {
+  if (value == null) return "";
+  const t = typeof value;
+  if (t === "string") return value;
+  if (t === "number" || t === "boolean") return String(value);
+  if (t === "function" || t === "symbol") return "";
+  if (t !== "object") return String(value);
+
+  if (
+    value instanceof Error ||
+    (typeof value.name === "string" && typeof value.message === "string")
+  ) {
+    return [value.name, value.message].filter(Boolean).join(": ").trim();
+  }
+
+  const direct = [
+    value.message,
+    value.statusText,
+    value.detail,
+    value.details,
+    value.reason,
+    value.error,
+  ];
+  for (const candidate of direct) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  for (const nested of [value.error, value.data, value.response]) {
+    if (nested && typeof nested === "object" && typeof nested.message === "string" && nested.message.trim()) {
+      return nested.message.trim();
+    }
+  }
+
+  try {
+    const seen = new WeakSet();
+    const json = JSON.stringify(value, (_k, v) => {
+      if (typeof v === "function") return undefined;
+      if (typeof v === "object" && v !== null) {
+        if (seen.has(v)) return "[Circular]";
+        seen.add(v);
+      }
+      return v;
+    });
+    if (json && json !== "{}" && json !== "[]" && json !== "null") {
+      return json.slice(0, 2000);
+    }
+  } catch { /* unserialisable */ }
+  return "";
+}
+
 function onAppError({ title, details, componentName, originalError }) {
   if (originalError?.response?.status === 402) return;
 
+  // Recover readable text BEFORE any classification — the retry/suppression
+  // checks below all match on message content, and "[object Object]" matches
+  // nothing, so an unreadable payload used to sail past every guard.
+  const safeTitle = toReadableText(title) || toReadableText(originalError);
+  const safeDetails = toReadableText(details) || toReadableText(originalError);
+  const safeComponent = toReadableText(componentName);
+
   // Skip transient React null-hook errors (HMR / init race)
-  if (isSuppressedError(originalError) || isSuppressedError({ toString: () => details })) return;
+  if (isSuppressedError(originalError) || isSuppressedError({ toString: () => safeDetails })) return;
+
+  // Nothing readable could be recovered at all: the AI cannot act on it and it
+  // would only burn a fix attempt. Let the studio-side gate reload instead.
+  if (!safeTitle.trim() && !safeDetails.trim()) {
+    console.warn("[Inject] dropping error with no readable payload:", originalError);
+    return;
+  }
 
   // Stale module graph → retry (reload) instead of reporting. Checked BEFORE the
   // quiet window: dropping these silently used to leave the preview broken with
   // nothing to recover it.
-  const verdict = handleImportError(details || title);
+  const verdict = handleImportError(safeDetails || safeTitle);
   if (verdict === "retry") return;
 
   // Skip anything thrown while a hot update is settling
@@ -168,9 +241,9 @@ function onAppError({ title, details, componentName, originalError }) {
     {
       type: "app_error",
       error: {
-        title: title?.toString(),
-        details: details?.toString(),
-        componentName: componentName?.toString(),
+        title: safeTitle,
+        details: safeDetails,
+        componentName: safeComponent,
         // Retries used up — the studio must treat this one as real.
         retry_exhausted: verdict === "exhausted",
       },
@@ -186,13 +259,16 @@ function handleUnhandledRejection(event) {
   const functionName =
     stack?.match(/at\s+(\w+)\s+\(eval/)?.[1] || shortPath;
 
+  // toReadableText, not toString(): a rejection reason is very often a plain
+  // object (rejected fetch/axios response) whose toString() is "[object Object]".
+  const reasonText = toReadableText(event.reason);
   const msg = functionName
-    ? `Error in ${functionName}: ${event.reason?.toString()}`
-    : event.reason?.toString();
+    ? `Error in ${functionName}: ${reasonText}`
+    : reasonText;
 
   onAppError({
     title: msg,
-    details: event.reason?.toString(),
+    details: reasonText,
     componentName: functionName,
     originalError: event.reason,
   });
@@ -209,13 +285,14 @@ function handleWindowError(event) {
     functionName = shortPath;
   }
 
-  const msg = functionName
-    ? `in ${functionName}: ${event.error?.toString()}`
-    : event.error?.toString();
+  // toReadableText, not toString(): `throw { code, message }` and other
+  // non-Error throws stringify to "[object Object]".
+  const errorText = toReadableText(event.error) || toReadableText(event.message);
+  const msg = functionName ? `in ${functionName}: ${errorText}` : errorText;
 
   onAppError({
     title: msg,
-    details: event.error?.toString(),
+    details: errorText,
     componentName: functionName,
     originalError: event.error,
   });

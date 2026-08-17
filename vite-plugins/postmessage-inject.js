@@ -225,14 +225,66 @@ export function postMessageInject() {
                   return match ? match[0] : null;
                 }
 
+                // Turn ANY thrown/rejected value into readable text. toString()
+                // on a plain object is the literal "[object Object]" — and an
+                // unhandled rejection very often carries a plain object (a
+                // rejected fetch/axios response, throw { code, message }, ...).
+                // That produced the information-free studio report
+                //   "1. [object Object] -> [object Object] -> no-component"
+                // which no classifier matched and no AI could fix, while still
+                // consuming one of the user's auto-fix attempts.
+                function toReadableText(value) {
+                  if (value === null || value === undefined) return "";
+                  var t = typeof value;
+                  if (t === "string") return value;
+                  if (t === "number" || t === "boolean") return String(value);
+                  if (t === "function" || t === "symbol") return "";
+                  if (t !== "object") return String(value);
+
+                  if (value instanceof Error ||
+                      (typeof value.name === "string" && typeof value.message === "string")) {
+                    return [value.name, value.message].filter(Boolean).join(": ").trim();
+                  }
+                  var direct = [value.message, value.statusText, value.detail,
+                                value.details, value.reason, value.error];
+                  for (var i = 0; i < direct.length; i++) {
+                    if (typeof direct[i] === "string" && direct[i].trim()) {
+                      return direct[i].trim();
+                    }
+                  }
+                  var nested = [value.error, value.data, value.response];
+                  for (var j = 0; j < nested.length; j++) {
+                    var n = nested[j];
+                    if (n && typeof n === "object" &&
+                        typeof n.message === "string" && n.message.trim()) {
+                      return n.message.trim();
+                    }
+                  }
+                  try {
+                    var seen = [];
+                    var json = JSON.stringify(value, function (_k, v) {
+                      if (typeof v === "function") return undefined;
+                      if (typeof v === "object" && v !== null) {
+                        if (seen.indexOf(v) !== -1) return "[Circular]";
+                        seen.push(v);
+                      }
+                      return v;
+                    });
+                    if (json && json !== "{}" && json !== "[]" && json !== "null") {
+                      return json.slice(0, 2000);
+                    }
+                  } catch (e) { /* unserialisable */ }
+                  return "";
+                }
+
                 function onAppError({ title, details, componentName }, isFinal) {
                   window.parent?.postMessage(
                     {
                       type: "app_error",
                       error: {
-                        title: title?.toString(),
-                        details: details?.toString(),
-                        componentName: componentName?.toString(),
+                        title: toReadableText(title),
+                        details: toReadableText(details),
+                        componentName: toReadableText(componentName),
                         // Set once the retries above are used up: tells the studio
                         // this one is real and must not be held back again.
                         retry_exhausted: !!isFinal,
@@ -247,8 +299,17 @@ export function postMessageInject() {
                 // the suppression list, the retry handler and the HMR quiet window
                 // before forwarding.
                 function onRuntimeError(payload) {
-                  var msg = (payload && (payload.details || payload.title)) || "";
+                  var msg = toReadableText(
+                    payload && (payload.details || payload.title)
+                  );
                   if (isSuppressed(msg)) return;
+
+                  // Nothing readable could be recovered — not actionable by the
+                  // user or the AI. Drop it; the studio-side gate reloads instead.
+                  if (!msg.trim()) {
+                    console.warn("[Inject] dropping error with no readable payload:", payload);
+                    return;
+                  }
 
                   // Retry FIRST: a stale-module-graph error must not be dropped by
                   // the quiet window either — dropping it left the preview broken
@@ -274,7 +335,7 @@ export function postMessageInject() {
 
                   onRuntimeError({
                     title,
-                    details: e.error?.toString() || e.message,
+                    details: toReadableText(e.error) || toReadableText(e.message),
                     componentName: shortPath,
                   });
                 }, true);
@@ -283,13 +344,14 @@ export function postMessageInject() {
                   const stack = e.reason?.stack;
                   const shortPath = extractPathWithLine(stack);
 
+                  const reasonText = toReadableText(e.reason);
                   const title = shortPath
                     ? \`Unhandled Error in \${shortPath}\`
-                    : e.reason?.toString();
+                    : reasonText;
 
                   onRuntimeError({
                     title,
-                    details: e.reason?.toString(),
+                    details: reasonText,
                     componentName: shortPath,
                   });
                 });
