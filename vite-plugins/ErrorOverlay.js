@@ -106,10 +106,27 @@ export class ErrorOverlay extends HTMLElement {
 	static sendErrorToParent(error, title, details, componentName) {
 		if (globalThis.window?.parent) {
 			try {
+				// Stale module graph (the dev server polls an NFS volume, so it can
+				// serve a dependency it has not re-read yet) → let the shared retry
+				// handler reload the page instead of crashing the studio preview.
+				// Helper lives on window because only this class body is injected
+				// into vite's client — see vite-plugins/postmessage-inject.js.
+				const retry = globalThis.window.__VIBEX_IMPORT_RETRY__;
+				const verdict = retry?.handle
+					? retry.handle(details || title, { title, componentName })
+					: 'skip';
+				if (verdict === 'retry') return;
+
 				globalThis.window.parent?.postMessage({ type: 'sync_tax_error', data: 'true' }, '*');
 				globalThis.window.parent?.postMessage({
 					type: "app_error",
-					error: { title, details, componentName, originalError: error }
+					error: {
+						title,
+						details,
+						componentName,
+						originalError: error,
+						retry_exhausted: verdict === 'exhausted',
+					}
 				}, "*");
 			} catch (error) {
 				console.warn('Failed to send error to iframe parent:', error?.message);
