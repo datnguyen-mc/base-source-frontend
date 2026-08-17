@@ -5,10 +5,23 @@ export function setupIframeMessaging() {
   if (isIframe) {
     window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     window.removeEventListener("error", handleWindowError);
+    window.removeEventListener("pagehide", handlePageHide);
 
     window.addEventListener("unhandledrejection", handleUnhandledRejection);
     window.addEventListener("error", handleWindowError);
+    window.addEventListener("pagehide", handlePageHide);
   }
+}
+
+/**
+ * The page is going away — a reload (ours, or Vite reconnecting after the tab
+ * was in the background), or a full navigation. This is the exact moment the
+ * preview goes white, and the only one the parent cannot observe from outside,
+ * so it is what lets it raise its loading overlay in time. It comes back down
+ * on `visual-edit-agent-ready` from the document that replaces this one.
+ */
+function handlePageHide() {
+  window.parent?.postMessage({ type: "sandbox:unloading" }, "*");
 }
 
 function extractPathWithLine(stack) {

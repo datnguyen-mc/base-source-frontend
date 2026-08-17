@@ -4,6 +4,9 @@ import { twMerge } from 'tailwind-merge'
 // Network + DOM must stay quiet this long before the page counts as loaded
 const READY_QUIET_MS = 400;
 
+// Give up waiting for the paint that follows that quiet window
+const READY_PAINT_MAX_MS = 300;
+
 // Give up waiting for that quiet window and report ready anyway
 const READY_MAX_WAIT_MS = 8000;
 
@@ -598,13 +601,23 @@ export default function VisualEditAgent() {
 			window.parent.postMessage({ type: 'visual-edit-agent-ready' }, '*');
 		};
 
+		// Wait for a real paint, but not forever: a hidden tab freezes rAF, and
+		// blocking on a frame that never comes holds the message until the cap
 		const sendReadyAfterPaint = () => {
-			requestAnimationFrame(() => requestAnimationFrame(sendReady));
+			const token = ++readyPaintToken;
+			const sendIfCurrent = () => { if (token === readyPaintToken) sendReady(); };
+
+			clearTimeout(readyPaintTimer);
+			readyPaintTimer = setTimeout(sendIfCurrent, READY_PAINT_MAX_MS);
+			requestAnimationFrame(() => requestAnimationFrame(sendIfCurrent));
 		};
 
-		// Any sign the page is still building itself restarts the quiet window
+		// Any sign the page is still building itself restarts the quiet window, and
+		// drops a paint wait already in flight
 		const noteReadyActivity = () => {
 			if (readyDisposed) return;
+			readyPaintToken++;
+			clearTimeout(readyPaintTimer);
 			clearTimeout(readyQuietTimer);
 			readyQuietTimer = setTimeout(sendReadyAfterPaint, READY_QUIET_MS);
 		};
