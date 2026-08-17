@@ -11,6 +11,12 @@ export const PAGES = {
 
 export const ADMINS = {
     Dashboard,
+    // NOTE: The AIFlow Settings admin page (src/pages/admin/AIFlowSettings.jsx)
+    // is intentionally NOT registered here in the base scaffold. It depends on
+    // the per-app generated `src/lib/aiflow.js`, which does not exist in the
+    // base — registering it would force that missing import into every app's
+    // build. The AIFlow generation template wires it into ADMINS when AIFlow is
+    // enabled for the app.
 };
 
 export const PRIVATE_PAGES = {
