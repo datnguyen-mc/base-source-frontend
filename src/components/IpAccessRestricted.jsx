@@ -42,8 +42,7 @@ const IpAccessRestricted = () => {
           {/* The server's message, verbatim. The fallback only covers a block
               detected without one (e.g. a request that never got a body). */}
           <p className="text-slate-600 break-words">
-            {authError?.message ||
-              'Access to this app is not avalible!'}
+            {authError?.message || 'Access to this app is not available.'}
           </p>
           {/* Reconnecting from an approved network is the normal fix, and it
               changes the answer without anything else changing — so offer a

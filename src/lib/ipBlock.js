@@ -12,7 +12,7 @@
  */
 
 /** `error_code` the API returns when the owner has restricted the app by IP. */
-export const IP_NOT_ALLOWED_CODE = 'IP_NOT_ALLOWED';
+export const NOT_ALLOWED_CODE = 'NOT_ALLOWED';
 
 /** Fired on `window` when the latch flips, so any listener can react. */
 export const IP_BLOCKED_EVENT = 'vibex:ip-not-allowed';
@@ -20,7 +20,7 @@ export const IP_BLOCKED_EVENT = 'vibex:ip-not-allowed';
 let blocked = false;
 
 /**
- * True when `err` is the API refusing this visitor by IP.
+ * True when `err` is the API refusing this visitor.
  *
  * Matched on `error_code` and NOT on an `extra_data.reason` field: the API wraps
  * every error as {code, message, data, error_code, timestamp}, so `error_code` is
@@ -29,7 +29,7 @@ let blocked = false;
 export function isIpNotAllowedError(err) {
   if (!err) return false;
   const body = err.data || {};
-  return err.status === 403 && body.error_code === IP_NOT_ALLOWED_CODE;
+  return err.status === 403 && body.error_code === NOT_ALLOWED_CODE;
 }
 
 export function isIpBlocked() {
