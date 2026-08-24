@@ -18,6 +18,11 @@ export const AuthProvider = ({ children }) => {
 
     const checkAppState = async () => {
         try {
+            // Both flags, in this order: clearing the error alone would render
+            // the real app for the duration of the request below, since
+            // isLoadingAuth is already false on any retry. A blocked visitor
+            // would see a flash of the UI they are being kept out of.
+            setIsLoadingAuth(true);
             setAuthError(null);
 
             // Fetch project info before anything else
@@ -26,8 +31,15 @@ export const AuthProvider = ({ children }) => {
                 setProjectInfo(info);
             } catch (projectError) {
                 console.error('GetProjectInfo failed:', projectError);
+                // The owner restricted this app to specific IP addresses and this
+                // visitor is not on the list. Flagged by `error_code` — the API's
+                // error envelope is {code, message, data, error_code, timestamp},
+                // so error_code is the field that actually survives to the client.
+                const isIpBlocked =
+                    projectError.status === 403 &&
+                    projectError.data?.error_code === 'IP_NOT_ALLOWED';
                 setAuthError({
-                    type: 'project_info_failed',
+                    type: isIpBlocked ? 'ip_not_allowed' : 'project_info_failed',
                     message: projectError.message || 'Failed to load project info'
                 });
                 setIsLoadingAuth(false);

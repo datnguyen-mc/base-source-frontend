@@ -19,6 +19,7 @@ import PageNotFound from "./lib/PageNotFound";
 import { AuthProvider } from "./lib/AuthProvider";
 import { useAuth } from "./lib/useAuth";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
+import IpAccessRestricted from "@/components/IpAccessRestricted";
 import Login from "./pages/admin/Login";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import RouterErrorBoundary from "@/components/ui/router-error-boundary";
@@ -72,7 +73,12 @@ const AuthenticatedApp = () => {
   }
 
   if (authError) {
-    if (authError.type === "user_not_registered") {
+    // Ordered before the auth branch below: an IP-blocked visitor is also
+    // unauthenticated, and `|| !isAuthenticated` would otherwise bounce them to
+    // a login page they cannot reach past the block.
+    if (authError.type === "ip_not_allowed") {
+      return <IpAccessRestricted />;
+    } else if (authError.type === "user_not_registered") {
       return <UserNotRegisteredError />;
     } else if (authError.type === "auth_required" || !isAuthenticated) {
       localStorage.removeItem("access_token");
