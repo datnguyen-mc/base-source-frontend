@@ -44,18 +44,6 @@ const IpAccessRestricted = () => {
           <p className="text-slate-600 break-words">
             {authError?.message || 'Access to this app is not available.'}
           </p>
-          {/* Reconnecting from an approved network is the normal fix, and it
-              changes the answer without anything else changing — so offer a
-              retry rather than making the visitor reload by hand. */}
-          <button
-            type="button"
-            // retryIpAccess clears the sticky latch before re-checking;
-            // checkAppState alone short-circuits on it and would do nothing.
-            onClick={() => (retryIpAccess || checkAppState)?.()}
-            className="mt-8 w-full h-10 rounded-md bg-slate-900 text-white text-sm font-medium transition-colors hover:bg-slate-800"
-          >
-            Try again
-          </button>
         </div>
       </div>
     </div>
