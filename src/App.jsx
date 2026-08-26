@@ -19,6 +19,7 @@ import PageNotFound from "./lib/PageNotFound";
 import { AuthProvider } from "./lib/AuthProvider";
 import { useAuth } from "./lib/useAuth";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
+import IpAccessRestricted from "@/components/IpAccessRestricted";
 import Login from "./pages/admin/Login";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import RouterErrorBoundary from "@/components/ui/router-error-boundary";
@@ -60,8 +61,18 @@ function ScrollBehavior() {
 }
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } =
+  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin, ipBlocked } =
     useAuth();
+
+  // HIGHEST PRIORITY — before loading, before authError, before any route.
+  // The app owner has restricted access by IP and this visitor is not on the
+  // list, so there is nothing else worth rendering: every request returns 403,
+  // a spinner here would never resolve, and the auth branch below would send
+  // them to a login page they cannot get past either. The flag is sticky in
+  // AuthProvider, so nothing that happens later can demote this screen.
+  if (ipBlocked || authError?.type === "ip_not_allowed") {
+    return <IpAccessRestricted />;
+  }
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
