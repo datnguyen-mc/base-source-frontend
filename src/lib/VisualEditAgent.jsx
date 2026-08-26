@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { twMerge } from 'tailwind-merge'
 
+// Network + DOM must stay quiet this long before the page counts as loaded
+const READY_QUIET_MS = 400;
+
+// Give up waiting for the paint that follows that quiet window
+const READY_PAINT_MAX_MS = 300;
+
+// Give up waiting for that quiet window and report ready anyway
+const READY_MAX_WAIT_MS = 8000;
+
 export default function VisualEditAgent() {
 	// this functions job is to receive first a message from the parent window, to set or unset visual edits mode. 
 	// once in visual edits mode, every hover over an elelmnt that has linenumbers should show an overlay, when clicked - it should stick the overlay and send a message to the parent window with the selected element
@@ -564,10 +573,88 @@ export default function VisualEditAgent() {
 		window.addEventListener('scroll', handleScroll, true); // Use capture to catch all scroll events
 		document.addEventListener('scroll', handleScroll, true); // Also listen on document
 
-		// Send ready message to parent
-		window.parent.postMessage({ type: 'visual-edit-agent-ready' }, '*');
+		// Send ready message to parent — the parent hides its loading overlay on
+		// it, so sending it on mount (React's first commit, app still an empty
+		// shell) is what leaves a white iframe on screen. Wait for the document to
+		// load, then for the network and the DOM to go quiet, then for a paint.
+		let readyDisposed = false;
+		let readyQuietTimer = null;
+		let readyPaintTimer = null;
+		let readyCapTimer = null;
+		let readyPaintToken = 0;
+		let domObserver = null;
+		let resourceObserver = null;
+
+		const stopReadyWatch = () => {
+			clearTimeout(readyQuietTimer);
+			clearTimeout(readyPaintTimer);
+			clearTimeout(readyCapTimer);
+			domObserver?.disconnect();
+			resourceObserver?.disconnect();
+			window.removeEventListener('load', startReadyWatch);
+		};
+
+		const sendReady = () => {
+			if (readyDisposed) return;
+			readyDisposed = true;
+			stopReadyWatch();
+			window.parent.postMessage({ type: 'visual-edit-agent-ready' }, '*');
+		};
+
+		// Wait for a real paint, but not forever: a hidden tab freezes rAF, and
+		// blocking on a frame that never comes holds the message until the cap
+		const sendReadyAfterPaint = () => {
+			const token = ++readyPaintToken;
+			const sendIfCurrent = () => { if (token === readyPaintToken) sendReady(); };
+
+			clearTimeout(readyPaintTimer);
+			readyPaintTimer = setTimeout(sendIfCurrent, READY_PAINT_MAX_MS);
+			requestAnimationFrame(() => requestAnimationFrame(sendIfCurrent));
+		};
+
+		// Any sign the page is still building itself restarts the quiet window, and
+		// drops a paint wait already in flight
+		const noteReadyActivity = () => {
+			if (readyDisposed) return;
+			readyPaintToken++;
+			clearTimeout(readyPaintTimer);
+			clearTimeout(readyQuietTimer);
+			readyQuietTimer = setTimeout(sendReadyAfterPaint, READY_QUIET_MS);
+		};
+
+		function startReadyWatch() {
+			if (readyDisposed) return;
+
+			// Webfonts land after load and re-flow the text
+			document.fonts?.ready?.then(noteReadyActivity).catch(() => { });
+
+			// Structure only — attributes/characterData also fire on every tween of
+			// an animated page, which then never goes quiet
+			domObserver = new MutationObserver(noteReadyActivity);
+			domObserver.observe(document.body, { childList: true, subtree: true });
+
+			try {
+				resourceObserver = new PerformanceObserver(noteReadyActivity);
+				resourceObserver.observe({ type: 'resource', buffered: false });
+			} catch (e) {
+				// No PerformanceObserver — the DOM watch alone still works
+			}
+
+			noteReadyActivity();
+		}
+
+		// Backstop: a page that never goes quiet must not strand the overlay
+		readyCapTimer = setTimeout(sendReady, READY_MAX_WAIT_MS);
+
+		if (document.readyState === 'complete') {
+			startReadyWatch();
+		} else {
+			window.addEventListener('load', startReadyWatch, { once: true });
+		}
 
 		return () => {
+			readyDisposed = true;
+			stopReadyWatch();
 			window.removeEventListener('message', handleMessage);
 			window.removeEventListener('scroll', handleScroll, true);
 			document.removeEventListener('scroll', handleScroll, true);
