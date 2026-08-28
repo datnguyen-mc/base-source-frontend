@@ -13,9 +13,6 @@ export function setupGoogleTranslateGuard() {
   const originalRemoveChild = Node.prototype.removeChild;
   Node.prototype.removeChild = function (child) {
     if (child.parentNode !== this) {
-      if (import.meta.env.DEV) {
-        console.warn("Blocked removeChild on node from a different parent (Google Translate).", child, this);
-      }
       return child;
     }
     return originalRemoveChild.apply(this, arguments);
@@ -24,9 +21,6 @@ export function setupGoogleTranslateGuard() {
   const originalInsertBefore = Node.prototype.insertBefore;
   Node.prototype.insertBefore = function (newNode, referenceNode) {
     if (referenceNode && referenceNode.parentNode !== this) {
-      if (import.meta.env.DEV) {
-        console.warn("Blocked insertBefore against a reference node from a different parent (Google Translate).", referenceNode, this);
-      }
       return newNode;
     }
     return originalInsertBefore.apply(this, arguments);
