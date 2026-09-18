@@ -4,6 +4,10 @@ import App from '@/App.jsx'
 import 'leaflet/dist/leaflet.css';
 import '@/index.css'
 import { setupIframeMessaging, markHmrQuiet } from '@/lib/iframe-messaging';
+import { setupGoogleTranslateGuard } from '@/lib/google-translate-guard';
+
+// Patch DOM methods before React renders (must run before render)
+setupGoogleTranslateGuard();
 
 // Install global error → postMessage handlers (must run before render)
 setupIframeMessaging();
