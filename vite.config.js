@@ -42,6 +42,9 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       allowedHosts: true,
+      hmr: {
+        overlay: false
+      },
       watch: {
         usePolling: true,
         interval: 1000,
