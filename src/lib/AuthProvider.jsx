@@ -193,8 +193,19 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const LOGIN_PATH = '/login';
+
     const navigateToLogin = () => {
-        vibex.auth.redirectToLogin(window.location.href);
+        try {
+            if (typeof window === 'undefined') return;
+            const { pathname, search } = window.location;
+            if (pathname === LOGIN_PATH) return;
+            const next = encodeURIComponent(pathname + search);
+            window.location.replace(`${LOGIN_PATH}?next=${next}`);
+        } catch (err) {
+            console.error('[Auth] navigateToLogin failed:', err);
+            try { window.location.href = LOGIN_PATH; } catch { /* empty */ }
+        }
     };
 
     return (

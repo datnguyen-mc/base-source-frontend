@@ -871,12 +871,24 @@ function createAuth(http, cfg) {
               return { success: true, token: finalToken, user: finalUser };
             }
 
-            default:
+            default: {
+              const payload = args[0];
+              const isPlainObject =
+                payload !== null &&
+                typeof payload === "object" &&
+                !Array.isArray(payload);
+              if (payload !== undefined && !isPlainObject) {
+                console.warn(
+                  `[vibexClient SDK] auth.${name}() expects an object payload, ignoring:`,
+                  payload
+                );
+              }
               return http.request(`auth/${name}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(args[0] ?? {}),
+                body: JSON.stringify(isPlainObject ? payload : {}),
               });
+            }
           }
         };
       },
