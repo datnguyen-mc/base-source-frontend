@@ -1,8 +1,8 @@
 /**
  * The app-wide "this visitor is blocked by IP" latch.
  *
- * Deliberately app-level and NOT in the SDK: the SDK is a vendored file, and the
- * block only needs to change what the app RENDERS.
+ * Deliberately app-level and NOT in the SDK: the SDK is the shared npm package
+ * @devvibex/sdk, and the block only needs to change what the app RENDERS.
  *
  * Sticky on purpose. Every request from a blocked visitor comes back 403, and the
  * app has several handlers that read a 403 as "session expired" and send the user
