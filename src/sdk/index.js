@@ -660,27 +660,49 @@ function createAuth(http, cfg) {
 
             case "redirectToLogin": {
               if (typeof window === "undefined") return;
-              const { origin, pathname, search, href } = window.location;
+              const { pathname, search } = window.location;
 
-              let next = pathname + search;
+              // 1. Current page, so the user comes back here after logging in
+              const currentPage = pathname + search;
+
+              // 2. Check which login pages the app has (dynamic import avoids a circular import)
+              let hasUserLogin = false;
+              let hasAdminLogin = false;
               try {
-                const from = new URL(typeof args[0] === "string" ? args[0] : href, origin);
-                if (from.origin === origin) next = from.pathname + from.search;
+                const { pagesConfig } = await import("@/pages.config");
+                hasUserLogin = Boolean(pagesConfig?.Pages?.login);
+                hasAdminLogin = Boolean(pagesConfig?.Admins?.login);
               } catch (_) {
-                // keep the current path
+                // route map unavailable → fall back to home
               }
 
-              const target = `/login?next=${encodeURIComponent(next)}`;
-
-              try {
-                const dest = new URL(target, origin);
-                // Already on the login page: navigating again would reload
-                // forever while the failure that sent us here persists.
-                if (dest.origin === origin && dest.pathname === pathname) return;
-                window.location.replace(dest.href);
-              } catch (_) {
-                // nothing awaits this call, so it must not reject
+              // 3. Pick the destination
+              const isAdminPage = /^\/admin(\/|$)/i.test(pathname);
+              let target = "/";
+              if (isAdminPage && hasAdminLogin) {
+                target = "/admin/login";
+              } else if (!isAdminPage && hasUserLogin) {
+                target = `/login?next=${encodeURIComponent(currentPage)}`;
               }
+
+              // 4. Destination differs from the current page → navigate
+              const clean = (path) => (path.replace(/\/+$/, "") || "/").toLowerCase();
+              const targetPath = target.split("?")[0];
+              if (clean(targetPath) !== clean(pathname)) {
+                window.location.replace(target);
+                return;
+              }
+
+              // 5. Already on the destination (e.g. the token expired while on /login)
+              const RELOAD_KEY = "vx_login_reload";
+              let lastReload = 0;
+              try {
+                lastReload = Number(sessionStorage.getItem(RELOAD_KEY)) || 0;
+                sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+              } catch (_) {
+                // sessionStorage unavailable → reload anyway
+              }
+              if (Date.now() - lastReload > 5000) window.location.reload();
               return;
             }
 
