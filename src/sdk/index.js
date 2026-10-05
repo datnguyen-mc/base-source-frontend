@@ -658,6 +658,32 @@ function createAuth(http, cfg) {
             case "setToken":
               return http.setToken(args[0], args[1]);
 
+            case "redirectToLogin": {
+              if (typeof window === "undefined") return;
+              const { origin, pathname, search, href } = window.location;
+
+              let next = pathname + search;
+              try {
+                const from = new URL(typeof args[0] === "string" ? args[0] : href, origin);
+                if (from.origin === origin) next = from.pathname + from.search;
+              } catch (_) {
+                // keep the current path
+              }
+
+              const target = `/login?next=${encodeURIComponent(next)}`;
+
+              try {
+                const dest = new URL(target, origin);
+                // Already on the login page: navigating again would reload
+                // forever while the failure that sent us here persists.
+                if (dest.origin === origin && dest.pathname === pathname) return;
+                window.location.replace(dest.href);
+              } catch (_) {
+                // nothing awaits this call, so it must not reject
+              }
+              return;
+            }
+
             case "loginWithSocial": {
               const provider = args[0];
               const options = args[1] ?? {};
