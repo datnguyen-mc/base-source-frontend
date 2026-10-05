@@ -670,23 +670,7 @@ function createAuth(http, cfg) {
                 // keep the current path
               }
 
-              let target = `/login?next=${encodeURIComponent(next)}`;
-              const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-              const timer = controller ? setTimeout(() => controller.abort(), 3000) : null;
-              try {
-                const res = await http.request("auth/redirectToLogin", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ redirect_url: origin + next }),
-                  signal: controller?.signal,
-                });
-                const loginUrl = res?.data?.login_url;
-                if (typeof loginUrl === "string" && loginUrl) target = loginUrl;
-              } catch (_) {
-                // endpoint missing or failing → keep the fallback
-              } finally {
-                if (timer) clearTimeout(timer);
-              }
+              const target = `/login?next=${encodeURIComponent(next)}`;
 
               try {
                 const dest = new URL(target, origin);
