@@ -658,6 +658,48 @@ function createAuth(http, cfg) {
             case "setToken":
               return http.setToken(args[0], args[1]);
 
+            case "redirectToLogin": {
+              if (typeof window === "undefined") return;
+              const { origin, pathname, search, href } = window.location;
+
+              let next = pathname + search;
+              try {
+                const from = new URL(typeof args[0] === "string" ? args[0] : href, origin);
+                if (from.origin === origin) next = from.pathname + from.search;
+              } catch (_) {
+                // keep the current path
+              }
+
+              let target = `/login?next=${encodeURIComponent(next)}`;
+              const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+              const timer = controller ? setTimeout(() => controller.abort(), 3000) : null;
+              try {
+                const res = await http.request("auth/redirectToLogin", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ redirect_url: origin + next }),
+                  signal: controller?.signal,
+                });
+                const loginUrl = res?.data?.login_url;
+                if (typeof loginUrl === "string" && loginUrl) target = loginUrl;
+              } catch (_) {
+                // endpoint missing or failing → keep the fallback
+              } finally {
+                if (timer) clearTimeout(timer);
+              }
+
+              try {
+                const dest = new URL(target, origin);
+                // Already on the login page: navigating again would reload
+                // forever while the failure that sent us here persists.
+                if (dest.origin === origin && dest.pathname === pathname) return;
+                window.location.replace(dest.href);
+              } catch (_) {
+                // nothing awaits this call, so it must not reject
+              }
+              return;
+            }
+
             case "loginWithSocial": {
               const provider = args[0];
               const options = args[1] ?? {};
