@@ -1,5 +1,5 @@
 import "./App.css";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
@@ -25,6 +25,7 @@ import ErrorBoundary from "@/components/ui/error-boundary";
 import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 import DefaultHome from "./pages/Home";
 import PoweredByBadge from "@/components/PoweredByBadge";
+import { syncDocumentHead } from "@/seo/client";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -56,6 +57,22 @@ function ScrollBehavior() {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }
   }, [navType, location.pathname, location.search, location.hash]);
+
+  return null;
+}
+
+/**
+ * Title + meta description follow src/seo.config.js — on navigation, and on the first load
+ * when the head was not server-rendered for this page (SPA build).
+ */
+function DocumentHeadSync() {
+  const location = useLocation();
+  const firstRender = useRef(true);
+
+  useEffect(() => {
+    syncDocumentHead(location.pathname + location.search, { initial: firstRender.current });
+    firstRender.current = false;
+  }, [location.pathname, location.search]);
 
   return null;
 }
@@ -129,6 +146,7 @@ function RootShell() {
       <ScrollRestoration getKey={(location) => location.pathname + location.search} />
       {/* Force top on PUSH/REPLACE */}
       <ScrollBehavior />
+      <DocumentHeadSync />
 
       <NavigationTracker />
       <AuthenticatedApp />

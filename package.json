@@ -9,8 +9,13 @@
   "scripts": {
     "dev": "vite",
     "dev:low-mem": "node --max-old-space-size=256 --expose-gc ./node_modules/vite/bin/vite.js",
+    "dev:ssr": "node server.js",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:spa": "vite build",
+    "build:ssr": "vite build --outDir dist/client && vite build --ssr src/entry-server.js --outDir dist/server",
+    "build:ssg": "vite build && vite build --ssr src/entry-server.js --outDir dist-ssr && node scripts/prerender.js",
+    "preview": "vite preview",
+    "start:ssr": "node server.js --prod"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",
@@ -50,8 +55,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "compression": "^1.8.2",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.2",
+    "express": "^5.2.1",
     "framer-motion": "^11.16.4",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
@@ -75,6 +82,7 @@
     "react-resizable-panels": "^2.1.7",
     "react-router-dom": "^7.2.0",
     "recharts": "^2.15.4",
+    "sirv": "^3.0.2",
     "sonner": "^2.0.1",
     "swiper": "^12.0.3",
     "tailwind-merge": "^3.0.2",
