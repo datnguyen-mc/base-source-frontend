@@ -67,6 +67,58 @@ function objectToFormData(obj, form = new FormData(), ns) {
 }
 
 // ================== http layer ==================
+// Set once redirectToLogin has reloaded the page in place; cleared by a successful
+// sign-in / session check, so a failing app can reload at most once and never loop.
+const LOGIN_RELOAD_KEY = "vx_login_reload";
+
+// Send the user to the right login page (shared by auth.redirectToLogin and the 401 handler).
+// reloadIfSamePage=false skips step 5, so the 401 handler can never start a reload loop.
+async function redirectToLogin({ reloadIfSamePage = true } = {}) {
+  if (typeof window === "undefined") return;
+  const { pathname, search } = window.location;
+
+  // 1. Current page, so the user comes back here after logging in
+  const currentPage = pathname + search;
+
+  // 2. Check whether the app has a user login page (dynamic import avoids a circular import).
+  // /admin/login is always routed in App.jsx, so admin pages need no check.
+  let hasUserLogin = false;
+  try {
+    const { pagesConfig } = await import("@/pages.config");
+    hasUserLogin = Boolean(pagesConfig?.Pages?.login);
+  } catch {
+    // route map unavailable → fall back to home
+  }
+
+  // 3. Pick the destination
+  const isAdminPage = /^\/admin(\/|$)/i.test(pathname);
+  let target = "/";
+  if (isAdminPage) {
+    target = "/admin/login";
+  } else if (hasUserLogin) {
+    target = `/login?next=${encodeURIComponent(currentPage)}`;
+  }
+
+  // 4. Destination differs from the current page → navigate
+  const clean = (path) => (path.replace(/\/+$/, "") || "/").toLowerCase();
+  const targetPath = target.split("?")[0];
+  if (clean(targetPath) !== clean(pathname)) {
+    window.location.replace(target);
+    return;
+  }
+
+  // 5. Already on the destination (e.g. the token expired while on /login):
+  // reload once so the app re-checks auth, never again until a successful sign-in.
+  if (!reloadIfSamePage) return;
+  try {
+    if (sessionStorage.getItem(LOGIN_RELOAD_KEY)) return;
+    sessionStorage.setItem(LOGIN_RELOAD_KEY, "1");
+  } catch {
+    return; // can't remember a previous reload → don't risk a loop
+  }
+  window.location.reload();
+}
+
 function createHttp(cfg) {
   const fetchImpl = cfg.fetchImpl ?? fetch;
   const storageKey = "access_token";
@@ -149,14 +201,19 @@ function createHttp(cfg) {
     if (res.status === 401) {
       console.warn(`[vibexClient SDK] Unauthorized (${res.status})`);
 
-      try {
-        token = undefined;
-        if (typeof window !== "undefined") {
-          if (!path.includes("auth/login") && !path.includes("auth/register") && !path.includes("auth/me")) {
-            // window.location.href = "/";
-          }
-        }
-      } catch (e) { }
+      token = undefined;
+
+      // Only an expired session (a token was sent) on a non-auth call redirects:
+      // anonymous visitors stay put, and auth/* errors (wrong password, …) reach the caller.
+      const isAuthCall = /(^|\/)auth\//.test(path);
+      if (typeof window !== "undefined" && currentToken && !isAuthCall) {
+        try {
+          localStorage.removeItem(storageKey);
+          localStorage.removeItem("refresh_token");
+          localStorage.removeItem("user");
+        } catch { }
+        redirectToLogin({ reloadIfSamePage: false }).catch(() => { });
+      }
 
       throw {
         name: "vibexClientError",
@@ -176,6 +233,11 @@ function createHttp(cfg) {
         status: data?.status ?? res.status,
         data,
       };
+    }
+
+    // A working session again → allow redirectToLogin one in-place reload next time
+    if (typeof window !== "undefined" && /(^|\/)auth\/(login|register|me|refresh)$/.test(path)) {
+      try { sessionStorage.removeItem(LOGIN_RELOAD_KEY); } catch { }
     }
 
     return looksJson ? data : text;
@@ -658,53 +720,8 @@ function createAuth(http, cfg) {
             case "setToken":
               return http.setToken(args[0], args[1]);
 
-            case "redirectToLogin": {
-              if (typeof window === "undefined") return;
-              const { pathname, search } = window.location;
-
-              // 1. Current page, so the user comes back here after logging in
-              const currentPage = pathname + search;
-
-              // 2. Check which login pages the app has (dynamic import avoids a circular import)
-              let hasUserLogin = false;
-              let hasAdminLogin = false;
-              try {
-                const { pagesConfig } = await import("@/pages.config");
-                hasUserLogin = Boolean(pagesConfig?.Pages?.login);
-                hasAdminLogin = Boolean(pagesConfig?.Admins?.login);
-              } catch (_) {
-                // route map unavailable → fall back to home
-              }
-
-              // 3. Pick the destination
-              const isAdminPage = /^\/admin(\/|$)/i.test(pathname);
-              let target = "/";
-              if (isAdminPage && hasAdminLogin) {
-                target = "/admin/login";
-              } else if (!isAdminPage && hasUserLogin) {
-                target = `/login?next=${encodeURIComponent(currentPage)}`;
-              }
-
-              // 4. Destination differs from the current page → navigate
-              const clean = (path) => (path.replace(/\/+$/, "") || "/").toLowerCase();
-              const targetPath = target.split("?")[0];
-              if (clean(targetPath) !== clean(pathname)) {
-                window.location.replace(target);
-                return;
-              }
-
-              // 5. Already on the destination (e.g. the token expired while on /login)
-              const RELOAD_KEY = "vx_login_reload";
-              let lastReload = 0;
-              try {
-                lastReload = Number(sessionStorage.getItem(RELOAD_KEY)) || 0;
-                sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
-              } catch (_) {
-                // sessionStorage unavailable → reload anyway
-              }
-              if (Date.now() - lastReload > 5000) window.location.reload();
-              return;
-            }
+            case "redirectToLogin":
+              return redirectToLogin();
 
             case "loginWithSocial": {
               const provider = args[0];
