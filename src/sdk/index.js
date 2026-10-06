@@ -658,6 +658,54 @@ function createAuth(http, cfg) {
             case "setToken":
               return http.setToken(args[0], args[1]);
 
+            case "redirectToLogin": {
+              if (typeof window === "undefined") return;
+              const { pathname, search } = window.location;
+
+              // 1. Current page, so the user comes back here after logging in
+              const currentPage = pathname + search;
+
+              // 2. Check which login pages the app has (dynamic import avoids a circular import)
+              let hasUserLogin = false;
+              let hasAdminLogin = false;
+              try {
+                const { pagesConfig } = await import("@/pages.config");
+                hasUserLogin = Boolean(pagesConfig?.Pages?.login);
+                hasAdminLogin = Boolean(pagesConfig?.Admins?.login);
+              } catch (_) {
+                // route map unavailable → fall back to home
+              }
+
+              // 3. Pick the destination
+              const isAdminPage = /^\/admin(\/|$)/i.test(pathname);
+              let target = "/";
+              if (isAdminPage && hasAdminLogin) {
+                target = "/admin/login";
+              } else if (!isAdminPage && hasUserLogin) {
+                target = `/login?next=${encodeURIComponent(currentPage)}`;
+              }
+
+              // 4. Destination differs from the current page → navigate
+              const clean = (path) => (path.replace(/\/+$/, "") || "/").toLowerCase();
+              const targetPath = target.split("?")[0];
+              if (clean(targetPath) !== clean(pathname)) {
+                window.location.replace(target);
+                return;
+              }
+
+              // 5. Already on the destination (e.g. the token expired while on /login)
+              const RELOAD_KEY = "vx_login_reload";
+              let lastReload = 0;
+              try {
+                lastReload = Number(sessionStorage.getItem(RELOAD_KEY)) || 0;
+                sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+              } catch (_) {
+                // sessionStorage unavailable → reload anyway
+              }
+              if (Date.now() - lastReload > 5000) window.location.reload();
+              return;
+            }
+
             case "loginWithSocial": {
               const provider = args[0];
               const options = args[1] ?? {};
