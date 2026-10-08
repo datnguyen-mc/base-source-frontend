@@ -7,8 +7,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(root, 'dist');
 const ssrDir = path.join(root, 'dist-ssr');
-const SEO_HEAD = /<!--seo-head-->[\s\S]*?<!--\/seo-head-->/;
-const SSR_OUTLET = '<!--ssr-outlet-->';
 const CONCURRENCY = 8;
 
 // dist/<path>/index.html for a clean URL path; null when the path has a query, or would land
@@ -34,7 +32,7 @@ if (!siteUrl) {
 }
 
 try {
-  // The untouched shell, for host rewrites of paths that were not prerendered.
+  // The SPA page with site defaults, for host rewrites of paths that were not prerendered.
   await fs.writeFile(path.join(distDir, 'spa.html'), template);
   const paths = await entry.listPaths();
   const written = [];
@@ -54,8 +52,7 @@ try {
           console.warn(`[ssg] skipped ${urlPath} — status ${page.status}`);
           continue;
         }
-        // Function replacements: page content may contain `$&`, `$'`… which a string would expand.
-        const html = template.replace(SEO_HEAD, () => page.head).replace(SSR_OUTLET, () => page.html);
+        const html = entry.injectPage(template, page);
         await fs.mkdir(path.dirname(file), { recursive: true });
         await fs.writeFile(file, html);
         written.push(urlPath);

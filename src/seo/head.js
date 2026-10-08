@@ -1,6 +1,6 @@
-// Pure renderers for <head>, crawlable body, JSON-LD, robots.txt and sitemap.xml, shared by the
+// Pure renderers for <head>, crawlable body, robots.txt and sitemap.xml, shared by the
 // SSR server, build:ssg, the Vite plugin and the client. Driven by src/seo.config.js and the
-// route files in src/seo-routes/ — edit those, not this file.
+// routes in src/seo.routes.js — edit those, not this file.
 export const escapeHtml = (value) =>
   String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -8,7 +8,6 @@ export const escapeHtml = (value) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-const escapeJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
 const plainText = (value) =>
   String(value == null ? '' : value)
     .replace(/<br\s*\/?>/gi, '\n')
@@ -20,7 +19,6 @@ const plainText = (value) =>
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
-const fullText = (value) => plainText(value).replace(/\s+/g, ' ').trim() || undefined;
 export const describe = (value, fallback = '') => {
   const text = plainText(value).replace(/\s+/g, ' ').trim();
   if (!text) return fallback;
@@ -45,115 +43,10 @@ const tag = (name, attrs) =>
   `<${name} ${Object.entries(attrs)
     .map(([key, value]) => `${key}="${escapeHtml(value)}"`)
     .join(' ')}>`;
-const SCHEMA_TYPES = { article: 'Article', discussion: 'DiscussionForumPosting', product: 'Product', profile: 'ProfilePage' };
-const OG_TYPES = { article: 'article', discussion: 'article', product: 'product', profile: 'profile' };
-const person = (name, url) => (name ? { '@type': 'Person', name, url } : undefined);
-const counter = (action, count) =>
-  count == null ? undefined : { '@type': 'InteractionCounter', interactionType: `https://schema.org/${action}`, userInteractionCount: Number(count) };
-export function buildJsonLd(page, site, siteUrl, path) {
-  const url = siteUrl && path ? `${siteUrl}${page.canonical || path}` : undefined;
-  const image = absolute(page.image, siteUrl) || undefined;
-  const description = describe(page.description || page.content) || undefined;
-  const out = [];
-  if (path === '/') {
-    out.push({
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: site.name,
-      url,
-      potentialAction: site.searchUrl
-        ? { '@type': 'SearchAction', target: absolute(site.searchUrl, siteUrl), 'query-input': 'required name=search_term_string' }
-        : undefined,
-    });
-  }
-  const schema = SCHEMA_TYPES[page.type];
-  if (schema === 'Article') {
-    out.push({
-      '@context': 'https://schema.org',
-      '@type': 'Article',
-      headline: page.title,
-      description,
-      image,
-      url,
-      datePublished: isoDate(page.publishedAt),
-      dateModified: isoDate(page.updatedAt || page.publishedAt),
-      author: person(page.author, absolute(page.authorUrl, siteUrl)),
-    });
-  } else if (schema === 'DiscussionForumPosting') {
-    out.push({
-      '@context': 'https://schema.org',
-      '@type': 'DiscussionForumPosting',
-      '@id': url,
-      url,
-      headline: page.title,
-      text: fullText(page.content || page.description),
-      image,
-      datePublished: isoDate(page.publishedAt),
-      dateModified: isoDate(page.updatedAt || page.publishedAt),
-      author: person(page.author, absolute(page.authorUrl, siteUrl)),
-      interactionStatistic: [counter('LikeAction', page.likeCount), counter('CommentAction', page.commentCount)].filter(Boolean),
-      comment: (page.comments || []).map((comment) => ({
-        '@type': 'Comment',
-        text: fullText(comment.text),
-        datePublished: isoDate(comment.publishedAt),
-        author: person(comment.author),
-      })),
-    });
-  } else if (schema === 'Product') {
-    out.push({
-      '@context': 'https://schema.org',
-      '@type': 'Product',
-      name: page.title,
-      description,
-      image,
-      url,
-      offers:
-        page.price != null
-          ? {
-              '@type': 'Offer',
-              price: page.price,
-              priceCurrency: page.currency,
-              availability: `https://schema.org/${page.availability || 'InStock'}`,
-              url,
-            }
-          : undefined,
-    });
-  } else if (schema === 'ProfilePage') {
-    out.push({
-      '@context': 'https://schema.org',
-      '@type': 'ProfilePage',
-      mainEntity: { '@type': 'Person', name: page.title, image, description, url },
-    });
-  }
-  if (page.items?.length) {
-    out.push({
-      '@context': 'https://schema.org',
-      '@type': 'ItemList',
-      itemListElement: page.items.map((item, index) => ({
-        '@type': 'ListItem',
-        position: index + 1,
-        url: absolute(item.url, siteUrl),
-        name: item.title,
-      })),
-    });
-  }
-  if (page.breadcrumbs?.length) {
-    out.push({
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: page.breadcrumbs.map((crumb, index) => ({
-        '@type': 'ListItem',
-        position: index + 1,
-        name: crumb.name,
-        item: absolute(crumb.url, siteUrl),
-      })),
-    });
-  }
-  return out.concat(page.jsonLd ? [].concat(page.jsonLd) : []);
-}
+const OG_TYPES = { article: 'article', product: 'product', profile: 'profile' };
 /**
- * The tags between <!--seo-head--> and <!--/seo-head--> in index.html. `path` is the page the
- * head was rendered for (SSR / SSG); without it (index.html defaults) the client fills the head.
+ * The page's <head> tags (see injectPage). `path` is the page the head was rendered for
+ * (SSR / SSG); without it (the SPA's site defaults) the client fills the head.
  */
 export function renderHead(page, site, siteUrl, path) {
   const title = pageTitle(page.title, site);
@@ -190,15 +83,49 @@ export function renderHead(page, site, siteUrl, path) {
     tag('meta', { name: 'twitter:title', content: title }),
     description && tag('meta', { name: 'twitter:description', content: description }),
     image && tag('meta', { name: 'twitter:image', content: image }),
-    ...(page.noindex ? [] : buildJsonLd(page, site, siteUrl, path)).map(
-      (data) => `<script type="application/ld+json">${escapeJson(data)}</script>`,
-    ),
   ];
-  return `<!--seo-head-->\n    ${lines.filter(Boolean).join('\n    ')}\n    <!--/seo-head-->`;
+  return lines.filter(Boolean).join('\n    ');
 }
-/** Plain semantic HTML of the page, for crawlers (hidden from people until the SPA mounts). */
-export function renderBody(page) {
+// ── Putting a page into index.html ────────────────────────────────────────────────────────
+// index.html stays a plain HTML file: its own SEO tags are found and replaced, the new ones are
+// appended before </head>. Scripts, styles, comments and other tags in <head> are left alone.
+const HEAD_TOKEN = /<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<!--[\s\S]*?-->|<title\b[^>]*>[\s\S]*?<\/title>|<(?:meta|link)\b[^>]*>/gi;
+const attrOf = (tag, name) => tag.match(new RegExp(`\\s${name}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1]?.toLowerCase();
+const keyOf = (tag) => {
+  if (/^<title/i.test(tag)) return 'title';
+  if (/^<meta/i.test(tag)) {
+    const name = attrOf(tag, 'name');
+    const property = attrOf(tag, 'property');
+    return name ? `name:${name}` : property ? `property:${property}` : null;
+  }
+  if (/^<link/i.test(tag)) return attrOf(tag, 'rel') ? `rel:${attrOf(tag, 'rel')}` : null;
+  return null;
+};
+// Dropped from index.html even when the new head has no replacement: tags about one URL, and
+// empty ones (an empty icon href even makes the browser fetch the page itself as the icon).
+const isEmpty = (tag) => /\s(?:content|href)\s*=\s*["']\s*["']/i.test(tag);
+const pageSpecific = (key) =>
+  ['name:title', 'rel:canonical', 'property:og:url', 'name:robots'].includes(key) || key.startsWith('property:article:');
+/** index.html with the page's head tags and crawlable HTML (`html`, inserted into #root). */
+export function injectPage(template, { head = '', html = '' } = {}) {
+  const end = template.search(/<\/head>/i);
+  if (end < 0) return template;
+  const replaced = new Set((head.match(HEAD_TOKEN) || []).map(keyOf).filter(Boolean));
+  const kept = template.slice(0, end).replace(new RegExp(`[ \\t]*(?:${HEAD_TOKEN.source})[ \\t]*\\n?`, 'gi'), (token) => {
+    const key = keyOf(token.trim());
+    return key && (replaced.has(key) || pageSpecific(key) || isEmpty(token)) ? '' : token;
+  });
+  const page = `${kept.replace(/\s*$/, '\n')}    ${head}\n${template.slice(end)}`;
+  return html ? page.replace(/<div\b[^>]*\sid=["']root["'][^>]*>/i, (open) => open + html) : page;
+}
+/**
+ * Plain semantic HTML of the page, for crawlers (hidden from people until the SPA mounts). A page
+ * without its own title / description shows the site's, so #root is never empty for a crawler.
+ */
+export function renderBody(page, site = {}) {
   if (!page || page.noindex) return '';
+  const title = page.title || site.name;
+  const description = page.description || (page.content ? '' : site.description);
   const parts = [];
   if (page.breadcrumbs?.length) {
     parts.push(
@@ -207,9 +134,9 @@ export function renderBody(page) {
         .join('')}</ol></nav>`,
     );
   }
-  if (page.title) parts.push(`<h1>${escapeHtml(page.title)}</h1>`);
-  if (page.description) parts.push(`<p>${escapeHtml(page.description)}</p>`);
-  if (page.image) parts.push(`<img src="${escapeHtml(page.image)}" alt="${escapeHtml(page.title || '')}">`);
+  if (title) parts.push(`<h1>${escapeHtml(title)}</h1>`);
+  if (description) parts.push(`<p>${escapeHtml(describe(description))}</p>`);
+  if (page.image) parts.push(`<img src="${escapeHtml(page.image)}" alt="${escapeHtml(title || '')}">`);
   if (page.content) {
     parts.push(
       plainText(page.content)

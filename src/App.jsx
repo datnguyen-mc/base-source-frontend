@@ -8,9 +8,8 @@ import NavigationTracker from "@/lib/NavigationTracker";
 import { pagesConfig } from "./pages.config";
 import {
   createBrowserRouter,
+  Outlet,
   RouterProvider,
-  Route,
-  Routes,
   ScrollRestoration,
   useNavigationType,
   useLocation,
@@ -26,6 +25,7 @@ import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 import DefaultHome from "./pages/Home";
 import PoweredByBadge from "@/components/PoweredByBadge";
 import { syncDocumentHead } from "@/seo/client";
+import { markHydrated, pageLoader, serverRendered } from "@/seo/ssr";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -62,7 +62,7 @@ function ScrollBehavior() {
 }
 
 /**
- * Title + meta description follow src/seo.config.js — on navigation, and on the first load
+ * Title + meta description follow src/seo.routes.js — on navigation, and on the first load
  * when the head was not server-rendered for this page (SPA build).
  */
 function DocumentHeadSync() {
@@ -91,7 +91,8 @@ const AuthenticatedApp = () => {
     return <IpAccessRestricted />;
   }
 
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  // A server-rendered page shows its content right away; the auth check finishes in the background.
+  if ((isLoadingPublicSettings || isLoadingAuth) && !serverRendered) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
@@ -112,31 +113,7 @@ const AuthenticatedApp = () => {
     }
   }
 
-  return (
-    <Routes>
-      {/* User layout */}
-      <Route element={<LayoutWrapper currentPageName={mainPageKey} />}>
-        <Route index element={<MainPage />} />
-        {Object.entries(Pages).map(([path, Page]) => (
-          <Route key={path} path={path} element={<Page />} />
-        ))}
-      </Route>
-
-      {/* LOGIN ROUTE - NO LAYOUT (Standalone) */}
-      <Route path="/admin/login" element={<Login />} />
-
-      {/* Admin layout */}
-      <Route path="admin" element={<AdminLayoutWrapper currentPageName={adminMainPageKey} />}>
-        <Route index element={<AdminMainPage />} />
-        {Object.entries(Admins).map(([path, Page]) => (
-          <Route key={`admin-${path}`} path={path} element={<Page />} />
-        ))}
-      </Route>
-
-      {/* 404 */}
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
-  );
+  return <Outlet />;
 };
 
 function RootShell() {
@@ -154,26 +131,76 @@ function RootShell() {
   );
 }
 
-const router = createBrowserRouter([
+// One route table for the browser router and the SSR static handler (src/seo/render-app.jsx).
+// A page (or a layout) can load its data on the server for SSR through a static property, read in
+// it with useLoaderData(). It runs for the server-rendered response only: in the browser it is null,
+// so navigation never waits on the network and the page fetches in useEffect as before:
+//   PostDetail.loader = pageLoader(async ({ params }) => ({ post: await Post.get(params.id) }));
+// Every loader is wrapped in pageLoader here, so one that throws or hangs can never turn a page
+// into an error screen: it resolves to null and the page loads its data in the browser.
+const withLoader = (Component) => (Component?.loader ? pageLoader(Component.loader) : undefined);
+const page = (Page) => ({ element: <Page />, loader: withLoader(Page) });
+
+export const routes = [
   {
-    path: "*",
     element: <RootShell />,
     errorElement: <RouterErrorBoundary />,
+    children: [
+      // User layout
+      {
+        element: <LayoutWrapper currentPageName={mainPageKey} />,
+        loader: withLoader(Layout),
+        children: [
+          { index: true, ...page(MainPage) },
+          ...Object.entries(Pages).map(([path, Page]) => ({ path, ...page(Page) })),
+        ],
+      },
+      // LOGIN ROUTE - NO LAYOUT (Standalone)
+      { path: "/admin/login", element: <Login /> },
+      // Admin layout
+      {
+        path: "admin",
+        element: <AdminLayoutWrapper currentPageName={adminMainPageKey} />,
+        loader: withLoader(AdminLayout),
+        children: [
+          { index: true, ...page(AdminMainPage) },
+          ...Object.entries(Admins).map(([path, Page]) => ({ path, ...page(Page) })),
+        ],
+      },
+      // 404
+      { path: "*", element: <PageNotFound /> },
+    ],
   },
-]);
+];
 
-function App() {
+/** Everything around the router — shared by the browser app and the SSR render. */
+export function AppProviders({ children, queryClient = queryClientInstance }) {
+  // Runs after every child mounted: from here on useBrowserState reads the browser right away.
+  useEffect(() => markHydrated(), []);
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <QueryClientProvider client={queryClientInstance}>
-          <RouterProvider router={router} />
+        <QueryClientProvider client={queryClient}>
+          {children}
           <Toaster />
           <VisualEditAgent />
           <PoweredByBadge />
         </QueryClientProvider>
       </AuthProvider>
     </ErrorBoundary>
+  );
+}
+
+// Created on first render, not at import: the server imports this module too. A server-rendered
+// page's loader data (window.__staticRouterHydrationData) is picked up automatically.
+let browserRouter;
+
+function App() {
+  browserRouter ??= createBrowserRouter(routes);
+  return (
+    <AppProviders>
+      <RouterProvider router={browserRouter} />
+    </AppProviders>
   );
 }
 

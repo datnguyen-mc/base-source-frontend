@@ -12,9 +12,20 @@ setupGoogleTranslateGuard();
 // Install global error → postMessage handlers (must run before render)
 setupIframeMessaging();
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
-)
+// A server-rendered page (SSR / SSG) is hydrated; otherwise the SPA renders from scratch.
+const container = document.getElementById('root');
+if (window.__staticRouterHydrationData) {
+  ReactDOM.hydrateRoot(container, <App />, {
+    // A mismatch (e.g. a widget that renders differently in the browser) is repaired by React
+    // re-rendering on the client — a warning, not a crash for the error reporters to flag.
+    onRecoverableError: (error) => console.warn('[ssr] hydration mismatch, re-rendered in the browser:', error),
+  });
+} else {
+  ReactDOM.createRoot(container).render(<App />);
+}
+// dev:ssr links the stylesheets so the server markup is styled before JS runs (server.js);
+// the imports above already injected Vite's own styles, which handle HMR from here on.
+document.querySelectorAll('link[data-ssr-dev-css]').forEach((link) => link.remove());
 
 if (import.meta.hot) {
   import.meta.hot.on('vite:beforeUpdate', () => {
