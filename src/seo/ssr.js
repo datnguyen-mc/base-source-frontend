@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import { endHydration, isHydrating } from '@/seo/hooks';
 // True while rendering on the server, and in the browser when the page arrived server-rendered
 // (React hydrates that markup instead of starting from an empty #root).
 const isServer = typeof window === 'undefined';
 export const serverRendered = isServer || Boolean(window.__staticRouterHydrationData);
 
-// True until a server-rendered page has finished hydrating (AppProviders calls markHydrated).
-let hydrating = serverRendered && !isServer;
-export const markHydrated = () => {
-  hydrating = false;
-};
+// A server-rendered page has finished hydrating (AppProviders calls it; src/seo/hooks.js too).
+export const markHydrated = endHydration;
+/** True on the server, and in the browser while a server-rendered page hydrates. */
+export const rendersServerMarkup = () => isServer || isHydrating();
 
 /**
  * useState for a value only the browser knows (localStorage, matchMedia…). On the server, and
@@ -18,7 +18,7 @@ export const markHydrated = () => {
  *   const [view, setView] = useBrowserState(readViewMode, 'card');
  */
 export function useBrowserState(read, serverValue) {
-  const [deferred] = useState(() => isServer || hydrating);
+  const [deferred] = useState(() => isServer || isHydrating());
   const [value, setValue] = useState(() => (deferred ? serverValue : read()));
   // Once, after mount: `read` may be a new function every render.
   const readRef = useRef(read);

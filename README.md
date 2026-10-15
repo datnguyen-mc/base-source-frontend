@@ -61,6 +61,8 @@ Environment variables:
 - `SSR_CACHE_TTL` (SSR) — seconds a rendered page is kept, default `60` in production, `0` (off)
   in `dev:ssr`. `SSR_CACHE_STALE` — seconds an expired page is still answered while it re-renders
   in the background, default `600`. `SSR_LOG=off` silences the per-request log.
+- `SSR_EFFECTS_TIMEOUT` (SSR / SSG) — milliseconds a page's effects get to load their data on the
+  server, default `3000`; past it the page is sent with what has arrived.
 
 ### Caching (SSR)
 
@@ -134,7 +136,55 @@ by the real React app on the server and hydrated in the browser. `noindex` pages
 admin…) stay client-rendered. The response header `X-SSR` shows `rendered`, `fallback` (the app
 threw on the server — see the log) or `unavailable` (backend down, 503).
 
-**1. Data: a loader instead of a first-load `useEffect`.** Effects never run on the server.
+**The HTML is the full page — as Postman, `curl` or a crawler gets it, without running any
+script:** its data (rule 1) and visible content (rule 6), with no change to the page code.
+
+**1. Data: a plain `useEffect` works.** The server runs the page's effects like the browser does:
+it renders the page, runs its `useEffect`s, waits for the requests they make, and renders again —
+until nothing changes (or `SSR_EFFECTS_TIMEOUT` is spent). The HTML has the data, and the browser
+hydrates it as is: every `useState` starts from the value the server rendered with, and the
+effects' requests are answered from the server's responses, so the page never flashes back to
+its loading state.
+
+```jsx
+export default function PostDetail() {
+  const { id } = useParams();
+  const [post, setPost] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    setLoading(true);
+    Post.get(id).then((res) => setPost(res?.data)).finally(() => setLoading(false));
+  }, [id]);
+  if (loading) return <Spinner />;
+  …                                                        // ← this is what the server sends
+}
+```
+
+How it works: `vite-plugins/seo-plugin.js` points `import … from 'react'` in the app's files to
+`src/seo/hooks.js` (shared infrastructure — `src/seo`, `src/lib/AuthProvider.jsx`… — keeps the real
+React), whose `useState` / `useReducer` / `useRef` / `useMemo` / `useCallback` / `useEffect` /
+`useLayoutEffect` are driven by `src/seo/server-effects.js` on the server. While an effect runs on
+the server:
+
+- it can only **read**: a `POST` / `PUT` / `PATCH` / `DELETE` never leaves (the promise stays
+  pending — a crawler never creates, likes or counts anything), and no `WebSocket` / `EventSource`
+  opens;
+- `localStorage` / `sessionStorage` are there, empty (a signed-out visitor's browser); an error it
+  throws (`window`…) is ignored, before or after an `await` — the browser runs the same effect
+  again for real;
+- its `setTimeout`s up to 1 s (a debounce…) are waited for; every timer and interval it starts is
+  cleared, and its cleanup called, when the render ends;
+- the visitor is signed out (the auth check never runs on the server), as for the rest of SSR.
+
+In the browser, hydration starts every `useState` from the value the server rendered (so the
+markup matches). The effects run again: a signed-out visitor's requests are answered from the
+server's responses, a signed-in visitor's go to the network, and the page keeps what the server
+rendered until they land — it never flashes back to its loading state. Client-side navigation is
+unchanged: pages mounted after that load as they always did. The server log shows the time spent
+(`effects 210ms`).
+
+**A loader is still the fastest way** for the main data of a page: it runs before the first
+render, and its data comes with the page as well.
 
 ```jsx
 import { useLoaderData } from 'react-router-dom';
@@ -187,8 +237,25 @@ No `window`/`document`/`localStorage` at module level either — guard with
 `typeof window !== 'undefined'`, or move it into an effect or event handler.
 
 **4. No session caches on the server.** One server process serves every visitor: a module-level
-cache (`let listCache = …`) written while rendering goes stale and leaks between visitors. Only
-write it in the browser (`if (typeof window !== 'undefined') listCache = list`).
+cache (`let listCache = …`) written while rendering — or by an effect, which the server runs too —
+goes stale and leaks between visitors. Only write it in the browser
+(`if (typeof window !== 'undefined') listCache = list`).
+
+**5. State the browser can be handed: JSON.** A `useState` holding a `Date`, a `Map`, a class…
+once an effect has set it is rendered with its initial value on the server (hydration could not
+start from it). Keep data as it came from the API (ISO strings) and format it while rendering.
+
+**6. Content is visible in the HTML.** framer-motion is handled for you: the app's
+`import … from 'framer-motion'` goes through `src/seo/motion.js`, so every `motion.*` / `m.*` /
+`motion.create(…)` element rendered on the server — or hydrated from it — starts at its final
+state (`initial={false}`) instead of `initial={{ opacity: 0 }}` / `initial="hidden"`; one mounted
+later (client-side navigation) animates as written. Anything else that hides content until a
+script runs must start visible, e.g. a reveal driven by an IntersectionObserver:
+
+```jsx
+const [shown, setShown] = useBrowserState(() => false, true);   // visible in the HTML
+<div className={shown ? 'opacity-100' : 'opacity-0'} …>
+```
 
 DOMPurify works on the server as is (it is given a jsdom window), and the auth check never blocks
 a server-rendered page: it renders as a signed-out visitor sees it, then updates in the browser.
@@ -202,5 +269,11 @@ a server-rendered page: it renders as a signed-out visitor sees it, then updates
 | A loader throws or hangs (over 4 s) | Loaders are wrapped in `pageLoader` automatically: the page gets `null` and loads in the browser |
 | A loader throws `redirect()` / a `Response` | Passed through: the server answers with that redirect / status |
 | A promise nobody handles while rendering | Logged; the server keeps serving |
+| An effect reads `window` / throws on the server | Ignored (not logged); the browser runs it again |
+| An effect writes (create, update, like…) | Held back on the server; done by the browser |
+| An effect's request is slow (over `SSR_EFFECTS_TIMEOUT`) | The page is sent with what has arrived; the rest loads in the browser |
+| An effect keeps changing state | At most 8 render passes; each effect re-runs at most 3 times |
+| A pass breaks once the data is in | The last pass that rendered is sent |
+| A motion element starts hidden (`initial={{ opacity: 0 }}`, `initial="hidden"`) | Rendered at its final state on the server and while hydrating; animates after navigation |
 | Server and browser markup differ | React re-renders in the browser; logged as a warning, not a crash |
 

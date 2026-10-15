@@ -8,6 +8,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(root, 'dist');
 const ssrDir = path.join(root, 'dist-ssr');
 const CONCURRENCY = 8;
+// An effect a page render ran (src/seo/server-effects.js) that reaches for `window` after an
+// `await` rejects with nobody to catch it: expected — the browser runs it again — not a failure.
+process.on('unhandledRejection', (reason) => {
+  if (globalThis[Symbol.for('vibex.ssr.effects')]?.current()) return;
+  console.error('[ssg] unhandled promise rejection:', reason);
+  process.exitCode = 1;
+});
+process.on('uncaughtException', (err) => {
+  if (globalThis[Symbol.for('vibex.ssr.effects')]?.current()) return;
+  console.error(err);
+  process.exit(1);
+});
 
 // dist/<path>/index.html for a clean URL path; null when the path has a query, or would land
 // outside dist/ (paths often come from data, e.g. a slug containing "../").
@@ -25,6 +37,8 @@ const fileFor = (urlPath) => {
 };
 
 const template = await fs.readFile(path.join(distDir, 'index.html'), 'utf-8');
+// No server runs during the build: a page's `fetch('/data.json')` reads dist/ (src/seo/server-effects.js).
+globalThis[Symbol.for('vibex.ssr.staticDir')] = distDir;
 const entry = await import(pathToFileURL(path.join(ssrDir, 'entry-server.js')).href);
 const siteUrl = entry.siteUrlOf('');
 if (!siteUrl) {

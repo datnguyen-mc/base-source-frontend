@@ -11,7 +11,19 @@ if (isProduction) process.env.NODE_ENV = 'production';
 const port = Number(process.env.PORT) || 3000;
 // A promise some page code forgot to handle while rendering must not take the server down for
 // every visitor (Node exits on an unhandled rejection by default).
-process.on('unhandledRejection', (reason) => console.error('[ssr] unhandled promise rejection:', reason));
+// One from an effect the server render ran (src/seo/server-effects.js) is expected — an effect
+// reaching for `window` after an `await` — and the browser runs that effect again: not logged.
+const inServerEffect = () => Boolean(globalThis[Symbol.for('vibex.ssr.effects')]?.current());
+process.on('unhandledRejection', (reason) => {
+  if (!inServerEffect()) console.error('[ssr] unhandled promise rejection:', reason);
+});
+// The same for an exception escaping an effect's callback; any other one still ends the process,
+// as it would without this handler.
+process.on('uncaughtException', (err) => {
+  if (inServerEffect()) return;
+  console.error(err);
+  process.exit(1);
+});
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();

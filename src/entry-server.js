@@ -1,3 +1,5 @@
+// First: the SDK keeps a reference to fetch when it is created (src/seo/fetch-hook.js).
+import '@/seo/fetch-hook';
 import { config, isNoindexPath, listPaths, resolvePage, site, siteUrlOf, staticPaths } from '@/seo/engine';
 import { injectPage, renderBody, renderHead, renderRobots as robots, renderSitemap as sitemap } from '@/seo/head';
 // SSR entry: loaded by server.js (SSR), scripts/prerender.js (SSG) and vite-plugins/seo-plugin.js
@@ -29,7 +31,7 @@ const crawlerView = (page) => {
 /**
  * → { status, head, html, mode, timings } — or { status, redirect, mode: 'redirect' }.
  * mode: 'rendered' (the React app), 'client' (noindex page, rendered in the browser) or
- * 'fallback' (the app failed on the server). timings in ms: { meta, data, render }.
+ * 'fallback' (the app failed on the server). timings in ms: { meta, data, effects, render }.
  * `fallbackUrl` is used only when neither SITE_URL nor site.url (src/seo.config.js) is set.
  */
 export async function render(url, { fallbackUrl } = {}) {

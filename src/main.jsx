@@ -1,3 +1,5 @@
+// First: answers the server's responses again while the page hydrates (src/seo/fetch-hook.js).
+import '@/seo/fetch-hook';
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
