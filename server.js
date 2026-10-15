@@ -8,7 +8,9 @@ import express from 'express';
 // `npm run build:ssr && npm run start:ssr` runs the production build.
 const isProduction = process.argv.includes('--prod') || process.env.NODE_ENV === 'production';
 if (isProduction) process.env.NODE_ENV = 'production';
-const port = Number(process.env.PORT) || 3000;
+// 5173 is what `vite` serves the SPA on, so dev:ssr, the preview pod and
+// anything else pointing at this app all keep using the one port.
+const port = Number(process.env.PORT) || 5173;
 // A promise some page code forgot to handle while rendering must not take the server down for
 // every visitor (Node exits on an unhandled rejection by default).
 // One from an effect the server render ran (src/seo/server-effects.js) is expected — an effect

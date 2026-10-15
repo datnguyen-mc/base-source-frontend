@@ -35,7 +35,7 @@ The app will be available at **http://localhost:5173**
 |---|---|
 | `npm run dev` | Start development server (port 5173) |
 | `npm run dev:low-mem` | Start dev server with low memory mode (256MB) |
-| `npm run dev:ssr` | Start the SSR dev server on top of Vite, with HMR (port `PORT`, default 3000) |
+| `npm run dev:ssr` | Start the SSR dev server on top of Vite, with HMR (port `PORT`, default 5173) |
 | `npm run build` / `npm run build:spa` | **SPA** build → `dist/` (static hosting, client-side rendering) |
 | `npm run build:ssr` | **SSR** build → `dist/client` + `dist/server` (needs a Node server) |
 | `npm run build:ssg` | **SSG** build → `dist/` with one prerendered HTML file per route (static hosting) |
@@ -57,7 +57,7 @@ Environment variables:
 - `VITE_APP_ENV=production` at build time drops the dev-only Vite plugins.
 - `SITE_URL` — public origin (overrides `site.url` in `src/seo.config.js`). Without either,
   SSR uses the request host and SSG writes no canonical URLs and no sitemap.
-- `PORT` (SSR) — default `3000`. HMR in `dev:ssr` uses the same port.
+- `PORT` (SSR) — default `5173`, the same port `npm run dev` uses. HMR in `dev:ssr` rides this port too.
 - `SSR_CACHE_TTL` (SSR) — seconds a rendered page is kept, default `60` in production, `0` (off)
   in `dev:ssr`. `SSR_CACHE_STALE` — seconds an expired page is still answered while it re-renders
   in the background, default `600`. `SSR_LOG=off` silences the per-request log.
@@ -77,7 +77,7 @@ Environment variables:
 
 ```bash
 VITE_APP_ENV=production SITE_URL=https://example.com npm run build:ssg
-VITE_APP_ENV=production npm run build:ssr && PORT=3000 npm run start:ssr
+VITE_APP_ENV=production npm run build:ssr && PORT=5173 npm run start:ssr
 ```
 
 ---
