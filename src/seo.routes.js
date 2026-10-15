@@ -34,7 +34,7 @@
 // ─────────────────────────────────────────────────────────────────────────────────────────
 export default [
   // Empty title / description fall back to `site` in src/seo.config.js.
-  { path: '/', title: '', description: '' },
+  { path: '/', title: '', description: '', image: '', keywords: '' },
 
   // Never indexed.
   { path: '/admin', noindex: true },
