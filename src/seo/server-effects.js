@@ -24,6 +24,15 @@ const MAX_RESPONSES_BYTES = 512 * 1024; // responses handed to the browser for t
 const MAX_INITIAL_STATE_BYTES = 8 * 1024; // per state no effect changed (see snapshot)
 const MAX_STATE_BYTES = 1024 * 1024; // a state larger than this is rendered with its initial value
 
+// What an effect throws — from its body, a timer, a microtask or its cleanup — is dropped here.
+const ignoreErrors = (fn) => {
+  try {
+    return fn();
+  } catch {
+    return undefined;
+  }
+};
+
 // Installed once per process (dev re-evaluates this module on every change).
 const GLOBAL = Symbol.for('vibex.ssr.effects');
 const runtime = (globalThis[GLOBAL] ??= (() => {
@@ -110,23 +119,16 @@ const runtime = (globalThis[GLOBAL] ??= (() => {
   // An exception thrown from a queued microtask would end the process: caught like the rest.
   const realQueueMicrotask = globalThis.queueMicrotask;
   globalThis.queueMicrotask = function queueMicrotask(callback) {
-    const run = current();
-    if (!run || typeof callback !== 'function') return realQueueMicrotask(callback);
-    return realQueueMicrotask(() => {
-      try {
-        callback();
-      } catch {
-        run.fail();
-      }
-    });
+    if (!current() || typeof callback !== 'function') return realQueueMicrotask(callback);
+    return realQueueMicrotask(() => ignoreErrors(callback));
   };
 
   // ── timers: the app's own are tracked, cleared at the end; none can throw out of a render ──
+  // Node's clearTimeout clears intervals too: clearInterval is the same function below.
   const real = {
     setTimeout: globalThis.setTimeout,
     setInterval: globalThis.setInterval,
     clearTimeout: globalThis.clearTimeout,
-    clearInterval: globalThis.clearInterval,
   };
   const owners = new WeakMap();
   const ownersById = new Map(); // clearTimeout(Number(handle)) works in Node too
@@ -151,13 +153,8 @@ const runtime = (globalThis[GLOBAL] ??= (() => {
     const app = fromApp(wrapper);
     let entry = null;
     const handle = real[kind](() => {
-      try {
-        if (!(app && run.closed)) callback(...args);
-      } catch (err) {
-        run.fail(err);
-      } finally {
-        if (kind === 'setTimeout') release(entry);
-      }
+      if (!(app && run.closed)) ignoreErrors(() => callback(...args));
+      if (kind === 'setTimeout') release(entry);
     }, delay);
     if (app) {
       entry = { run, handle, id: Number(handle), kind, released: false };
@@ -300,7 +297,6 @@ export function createEffectsRun({ timeout, href }) {
     sockets: new Set(),
     storage: {},
     timers: new Set(),
-    errors: 0,
     track(promise) {
       pending.add(promise);
       const done = () => pending.delete(promise);
@@ -311,9 +307,6 @@ export function createEffectsRun({ timeout, href }) {
       if (responseBytes + body.length > MAX_RESPONSES_BYTES) return;
       responseBytes += body.length;
       responses.push({ url, status, type, body });
-    },
-    fail() {
-      run.errors += 1;
     },
   };
 
@@ -377,31 +370,19 @@ export function createEffectsRun({ timeout, href }) {
       }
       const record = { deps, runs: (previous?.runs || 0) + 1, cleanup: null };
       effects.set(id, record);
-      try {
-        const result = runtime.als.run(run, effect);
-        if (typeof result === 'function') record.cleanup = result;
-      } catch {
-        run.fail();
-      }
+      const result = ignoreErrors(() => runtime.als.run(run, effect));
+      if (typeof result === 'function') record.cleanup = result;
     },
   };
   const cleanup = (record) => {
     const fn = record.cleanup;
     record.cleanup = null;
-    if (!fn) return;
-    try {
-      runtime.als.run(run, fn);
-    } catch {
-      run.fail();
-    }
+    if (fn) ignoreErrors(() => runtime.als.run(run, fn));
   };
 
   const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
   return {
     context,
-    get errors() {
-      return run.errors;
-    },
     /** Before each render pass. The last one (`final`) runs no effect: it renders what is there. */
     beginPass(final = false) {
       pass += 1;
@@ -414,9 +395,8 @@ export function createEffectsRun({ timeout, href }) {
       for (;;) {
         // Let what just answered carry on (setState after `await`, the next request…).
         for (let i = 0; i < 3; i += 1) await nextTurn();
-        if (!pending.size) return true;
         const left = deadline - Date.now();
-        if (left <= 0) return false;
+        if (!pending.size || left <= 0) return;
         let timer;
         await Promise.race([
           Promise.allSettled([...pending]),
@@ -466,12 +446,7 @@ export function createEffectsRun({ timeout, href }) {
       run.sockets.forEach((req) => req.destroy());
       [...run.timers].forEach((entry) => {
         runtime.clear(entry);
-        // (a runtime installed by an older version of this file, still running in dev, has no release)
-        if (runtime.release) runtime.release(entry);
-        else {
-          run.timers.delete(entry);
-          entry.done?.();
-        }
+        runtime.release(entry);
       });
     },
   };

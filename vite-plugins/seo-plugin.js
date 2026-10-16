@@ -9,7 +9,9 @@ import { parseAst, runnerImport } from 'vite';
 // The SEO modules are loaded through Vite (aliases, imports all work): the dev server's SSR
 // loader while serving, a one-off module runner during `vite build`.
 const ENTRY = '/src/entry-server.js';
+const SCRIPT = /\.[cm]?[jt]sx?$/;
 
+// ── Browser-only packages: an inert stand-in in the server build ─────────────────────────────
 // Packages that touch window/document the moment they are imported. In the server build their
 // imports in app code become an inert stand-in (components render nothing, calls do nothing),
 // so one page with a map or an editor cannot stop every other page from rendering on the
@@ -33,6 +35,8 @@ const INERT_PRELUDE =
   // (`Quill.import('ui/icons').bold = …` at module level) → the stand-in again, so set-up code runs.
   `apply: (_t, _self, args) => (args[0] !== null && typeof args[0] === 'object' ? null : ${INERT}), ` +
   `construct: () => ${INERT}, set: () => true });\n`;
+const IMPORT_FROM = /^[ \t]*import\s+([^'";]+?)\s+from\s+['"]([^'"]+)['"];?/gm;
+const IMPORT_BARE = /^[ \t]*import\s+['"]([^'"]+)['"];?/gm;
 // `import A, { b, c as d } from 'pkg'` → `const A = inert, b = inert, d = inert;`
 const declare = (clause) => {
   const names = [];
@@ -47,6 +51,16 @@ const declare = (clause) => {
   if (defaultName) names.unshift(defaultName);
   return names.length ? `const ${names.map((name) => `${name} = ${INERT}`).join(', ')};` : '';
 };
+/** `code` with its browser-only imports turned into the inert stand-in — as is when it has none. */
+const stubBrowserOnly = (code) => {
+  if (!BROWSER_ONLY.some((pkg) => code.includes(pkg))) return code;
+  const out = code
+    .replace(IMPORT_FROM, (statement, clause, source) => (isBrowserOnly(source) ? declare(clause) : statement))
+    .replace(IMPORT_BARE, (statement, source) => (isBrowserOnly(source) ? '' : statement));
+  return out === code ? code : INERT_PRELUDE + out;
+};
+
+// ── `react` / `framer-motion` in the app's own files ─────────────────────────────────────────
 // So that the HTML a server render sends is the full page — as Postman or a crawler gets it, no
 // script run — the app's own files see:
 //   • `react` through src/seo/hooks.js, whose hooks let the server render a page with the data its
@@ -62,9 +76,15 @@ const REAL_REACT = [
   /\/src\/lib\/(AuthContext|AuthProvider|IframeHeartbeat|NavigationTracker|PageNotFound|VisualEditAgent|app-params|coreUtils|google-translate-guard|iframe-messaging|ipBlock|query-client|useAuth)\.[jt]sx?$/,
   /\/src\/components\/(IpAccessRestricted|UserNotRegisteredError|PoweredByBadge)\.[jt]sx?$/,
 ];
-// The source of every `import … from` / `export … from` naming one of SSR_IMPORTS, from the parsed
-// module — never a string or a comment that happens to contain `from 'react'`.
+// The wrappers themselves always import the real packages, whatever REAL_REACT says: rewritten,
+// src/seo/hooks.js would import itself and the app would not start at all.
+const isWrapper = (file, root) =>
+  Object.values(SSR_IMPORTS).some((id) => file.replace(SCRIPT, '') === `${root}/${id.replace(/^@\//, 'src/')}`);
+const usesAppHooks = (file, root) =>
+  file.startsWith(`${root}/src/`) && !isWrapper(file, root) && !REAL_REACT.some((re) => re.test(file));
 const SSR_IMPORT_HINT = /['"](?:react|framer-motion)['"]/;
+// The source of every `import … from` / `export … from` naming one of SSR_IMPORTS, from the parsed
+// module — never a string or a comment that happens to contain `from 'react'`. null: nothing to do.
 const rewriteImports = (code, file) => {
   if (!SSR_IMPORT_HINT.test(code)) return null;
   let ast;
@@ -80,22 +100,13 @@ const rewriteImports = (code, file) => {
   if (!sources.length) return null;
   return sources.reduce((out, source) => `${out.slice(0, source.start)}'${SSR_IMPORTS[source.value]}'${out.slice(source.end)}`, code);
 };
-// The wrappers themselves always import the real packages, whatever REAL_REACT says: rewritten,
-// src/seo/hooks.js would import itself and the app would not start at all.
-const isWrapper = (file, root) =>
-  Object.values(SSR_IMPORTS).some((id) => file.replace(/\.[cm]?[jt]sx?$/, '') === `${root}/${id.replace(/^@\//, 'src/')}`);
+
+// ── src/seo/fetch-hook.js before the SDK ─────────────────────────────────────────────────────
 // The SDK keeps the fetch it finds when a client is created, so src/seo/fetch-hook.js (which holds
 // a server render's writes back and replays its reads in the browser) is imported first by every
 // module of src/sdk and src/api — whatever order the entries list their imports in.
 const FETCH_HOOK_IMPORT = "import '@/seo/fetch-hook';\n";
 const needsFetchHook = (file, root) => file.startsWith(`${root}/src/sdk/`) || file.startsWith(`${root}/src/api/`);
-const usesAppHooks = (file, root) =>
-  file.startsWith(`${root}/src/`) &&
-  /\.[cm]?[jt]sx?$/.test(file) &&
-  !isWrapper(file, root) &&
-  !REAL_REACT.some((re) => re.test(file));
-const IMPORT_FROM = /^[ \t]*import\s+([^'";]+?)\s+from\s+['"]([^'"]+)['"];?/gm;
-const IMPORT_BARE = /^[ \t]*import\s+['"]([^'"]+)['"];?/gm;
 
 export function seoPlugin() {
   let resolved;
@@ -117,31 +128,14 @@ export function seoPlugin() {
     },
     transform(code, id, options) {
       const file = id.split('?')[0];
-      if (id.includes('/node_modules/') || !/\.[cm]?[jt]sx?$/.test(file)) return null;
-      const server = this.environment ? this.environment.config.consumer === 'server' : options?.ssr;
-      let changed = false;
-      let out = code;
+      if (id.includes('/node_modules/') || !SCRIPT.test(file)) return null;
+      const { root } = resolved;
+      const isServer = this.environment ? this.environment.config.consumer === 'server' : options?.ssr;
       // Both builds, so the browser hydrates with the same hooks the server rendered with.
-      const rewritten = usesAppHooks(file, resolved.root) ? rewriteImports(code, file) : null;
-      if (rewritten) {
-        out = rewritten;
-        changed = true;
-      }
-      if (needsFetchHook(file, resolved.root)) {
-        out = FETCH_HOOK_IMPORT + out;
-        changed = true;
-      }
-      let prelude = '';
-      if (server && BROWSER_ONLY.some((pkg) => code.includes(pkg))) {
-        let inert = false;
-        out = out
-          .replace(IMPORT_FROM, (statement, clause, source) =>
-            isBrowserOnly(source) ? ((inert = true), declare(clause)) : statement)
-          .replace(IMPORT_BARE, (statement, source) => (isBrowserOnly(source) ? ((inert = true), '') : statement));
-        if (inert) prelude = INERT_PRELUDE;
-        changed ||= inert;
-      }
-      return changed ? { code: prelude + out, map: null } : null;
+      let out = (usesAppHooks(file, root) && rewriteImports(code, file)) || code;
+      if (needsFetchHook(file, root)) out = FETCH_HOOK_IMPORT + out;
+      if (isServer) out = stubBrowserOnly(out);
+      return out === code ? null : { code: out, map: null };
     },
     async transformIndexHtml(html, ctx) {
       const entry = await loadEntry();

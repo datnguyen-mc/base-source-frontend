@@ -8,9 +8,14 @@ import express from 'express';
 // `npm run build:ssr && npm run start:ssr` runs the production build.
 const isProduction = process.argv.includes('--prod') || process.env.NODE_ENV === 'production';
 if (isProduction) process.env.NODE_ENV = 'production';
+const root = path.dirname(fileURLToPath(import.meta.url));
 // 5173 is what `vite` serves the SPA on, so dev:ssr, the preview pod and
 // anything else pointing at this app all keep using the one port.
 const port = Number(process.env.PORT) || 5173;
+const SITEMAP_TTL_S = 600;
+// Sent with every 503: crawlers come back after this many seconds.
+const RETRY_AFTER_S = '120';
+
 // A promise some page code forgot to handle while rendering must not take the server down for
 // every visitor (Node exits on an unhandled rejection by default).
 // One from an effect the server render ran (src/seo/server-effects.js) is expected — an effect
@@ -26,7 +31,8 @@ process.on('uncaughtException', (err) => {
   console.error(err);
   process.exit(1);
 });
-const root = path.dirname(fileURLToPath(import.meta.url));
+// The backend could not answer (src/seo/entities.js): a 503, not a bug worth a stack trace.
+const isDataUnavailable = (err) => err?.name === 'SeoDataUnavailableError';
 
 const app = express();
 app.disable('x-powered-by');
@@ -82,15 +88,15 @@ app.get('/sitemap.xml', async (req, res) => {
     const cached = Boolean(hit && hit.expires >= Date.now());
     if (!cached) {
       const { renderSitemap } = await loadEntry();
-      hit = { xml: await renderSitemap({ fallbackUrl: origin }), expires: Date.now() + 10 * 60 * 1000 };
+      hit = { xml: await renderSitemap({ fallbackUrl: origin }), expires: Date.now() + SITEMAP_TTL_S * 1000 };
       if (sitemapCache.size > 20) sitemapCache.clear();
       sitemapCache.set(origin, hit);
     }
-    res.type('application/xml').set('Cache-Control', 'public, max-age=600').send(hit.xml);
+    res.type('application/xml').set('Cache-Control', `public, max-age=${SITEMAP_TTL_S}`).send(hit.xml);
     logPage(req, 200, cached ? 'sitemap (cached)' : 'sitemap (built)', started);
   } catch (err) {
-    if (err?.name !== 'SeoDataUnavailableError') console.error('[ssr] sitemap failed', err);
-    res.status(503).set('Retry-After', '120').end();
+    if (!isDataUnavailable(err)) console.error('[ssr] sitemap failed', err);
+    res.status(503).set('Retry-After', RETRY_AFTER_S).end();
     logPage(req, 503, 'sitemap unavailable', started);
   }
 });
@@ -155,7 +161,7 @@ const renderPage = async (req) => {
     vite?.ssrFixStacktrace(err);
     // The SPA still works without SSR — people get the app either way. When the backend is
     // down, 503 tells crawlers to come back later instead of indexing an empty page.
-    const unavailable = err?.name === 'SeoDataUnavailableError';
+    const unavailable = isDataUnavailable(err);
     if (!unavailable) console.error('[ssr] render failed, serving the SPA shell', err);
     return { status: unavailable ? 503 : 200, html: await spaShell(template), mode: unavailable ? 'unavailable' : 'fallback' };
   }
@@ -167,21 +173,22 @@ const renderOnce = (key, req) => {
   return rendering.get(key);
 };
 
+// Browsers revalidate every time (ETag → 304); a CDN may keep the page as long as we do.
+const cacheControl = (page) => {
+  if (!cacheable(page)) return 'no-store';
+  if (!cacheTtl) return 'public, max-age=0, must-revalidate';
+  return `public, max-age=0, s-maxage=${cacheTtl / 1000}, stale-while-revalidate=${cacheStale / 1000}`;
+};
 const sendPage = (res, page, cacheState) =>
   res
     .status(page.status)
     .set({
       'Content-Type': 'text/html; charset=utf-8',
-      // Browsers revalidate every time (ETag → 304); a CDN may keep the page as long as we do.
-      'Cache-Control': !cacheable(page)
-        ? 'no-store'
-        : cacheTtl
-          ? `public, max-age=0, s-maxage=${cacheTtl / 1000}, stale-while-revalidate=${cacheStale / 1000}`
-          : 'public, max-age=0, must-revalidate',
+      'Cache-Control': cacheControl(page),
       // How the page was produced: rendered | client | fallback | unavailable.
       'X-SSR': page.mode,
       ...(cacheTtl ? { 'X-SSR-Cache': cacheState } : {}),
-      ...(page.mode === 'unavailable' ? { 'Retry-After': '120' } : {}),
+      ...(page.mode === 'unavailable' ? { 'Retry-After': RETRY_AFTER_S } : {}),
     })
     .send(page.html);
 

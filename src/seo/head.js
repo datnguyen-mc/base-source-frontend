@@ -2,14 +2,14 @@
 // SSR server, build:ssg, the Vite plugin and the client. Driven by src/seo.config.js and the
 // routes in src/seo.routes.js — edit those, not this file.
 export const escapeHtml = (value) =>
-  String(value == null ? '' : value)
+  String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 const plainText = (value) =>
-  String(value == null ? '' : value)
+  String(value ?? '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|blockquote|pre|tr)>/gi, '\n')
     .replace(/<[^>]*>/g, '')
@@ -52,16 +52,18 @@ export function renderHead(page, site, siteUrl, path) {
   const title = pageTitle(page.title, site);
   const description = describe(page.description || page.content, site.description);
   const image = absolute(page.image || site.image, siteUrl);
+  const keywords = page.keywords || site.keywords;
   // `page.canonical` lets several URLs of one page (e.g. /p/54 and /p/my-title-54) share one.
   const canonical = siteUrl && path && !page.noindex ? `${siteUrl}${page.canonical || path}` : '';
-  const twitterCard = image ? 'summary_large_image' : 'summary';
   const ogType = OG_TYPES[page.type] || 'website';
-  const published = ogType === 'article' && isoDate(page.publishedAt);
-  const modified = ogType === 'article' && isoDate(page.updatedAt);
+  const locale = ogLocale(site.lang);
+  const article = ogType === 'article';
+  const published = article && isoDate(page.publishedAt);
+  const modified = article && isoDate(page.updatedAt);
   const lines = [
     `<title data-seo-path="${escapeHtml(path || '')}">${escapeHtml(title)}</title>`,
     description && tag('meta', { name: 'description', content: description }),
-    (page.keywords || site.keywords) && tag('meta', { name: 'keywords', content: page.keywords || site.keywords }),
+    keywords && tag('meta', { name: 'keywords', content: keywords }),
     tag('meta', { name: 'robots', content: page.noindex ? 'noindex' : 'index, follow, max-image-preview:large' }),
     canonical && tag('link', { rel: 'canonical', href: canonical }),
     site.favicon && tag('link', { rel: 'icon', href: site.favicon }),
@@ -73,12 +75,12 @@ export function renderHead(page, site, siteUrl, path) {
     description && tag('meta', { property: 'og:description', content: description }),
     image && tag('meta', { property: 'og:image', content: image }),
     canonical && tag('meta', { property: 'og:url', content: canonical }),
-    ogLocale(site.lang) && tag('meta', { property: 'og:locale', content: ogLocale(site.lang) }),
+    locale && tag('meta', { property: 'og:locale', content: locale }),
     published && tag('meta', { property: 'article:published_time', content: published }),
     modified && tag('meta', { property: 'article:modified_time', content: modified }),
-    ogType === 'article' && page.author && tag('meta', { property: 'article:author', content: page.author }),
-    ogType === 'article' && page.section && tag('meta', { property: 'article:section', content: page.section }),
-    tag('meta', { name: 'twitter:card', content: twitterCard }),
+    article && page.author && tag('meta', { property: 'article:author', content: page.author }),
+    article && page.section && tag('meta', { property: 'article:section', content: page.section }),
+    tag('meta', { name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' }),
     site.twitterSite && tag('meta', { name: 'twitter:site', content: site.twitterSite }),
     tag('meta', { name: 'twitter:title', content: title }),
     description && tag('meta', { name: 'twitter:description', content: description }),

@@ -1,5 +1,3 @@
-// Hooks below branch on SsrEffectsContext: fixed for the whole process (server / browser), so the
-// order of hooks never changes between two renders of a component.
 import React from 'react';
 import { endFetchReplay, networkSettled } from '@/seo/fetch-hook';
 // `react` as the app's own code sees it. vite-plugins/seo-plugin.js points `import … from 'react'`
@@ -58,9 +56,9 @@ export const {
 export const SsrEffectsContext = React.createContext(null);
 
 // { data, initial } — see snapshot() in src/seo/server-effects.js.
-let hydrationState = typeof window !== 'undefined' && window.__SSR_STATE__ ? window.__SSR_STATE__ : null;
+let hydrationState = (typeof window !== 'undefined' && window.__SSR_STATE__) || null;
 if (typeof window !== 'undefined') delete window.__SSR_STATE__;
-const has = (map, id) => Boolean(map) && Object.prototype.hasOwnProperty.call(map, id);
+const has = (map, id) => Boolean(map) && Object.hasOwn(map, id);
 const sameJson = (a, b) => {
   try {
     return JSON.stringify(a) === JSON.stringify(b);
@@ -132,9 +130,13 @@ const endAfterThisCommit = () => {
 const initialOf = (initial) => (typeof initial === 'function' ? initial() : initial);
 const NO_CORRECTION = Symbol('no correction');
 
+// → [id, ssr]: every hook below branches on `ssr` (SsrEffectsContext), which is fixed for the
+// whole process (server / browser), so the order of hooks never changes between two renders.
+// Each hook calls `ssr.*` itself: server-effects.js tells hooks apart by the line that called it.
+const useServerRun = () => [React.useId(), React.useContext(SsrEffectsContext)];
+
 export function useState(initial) {
-  const id = React.useId();
-  const ssr = React.useContext(SsrEffectsContext);
+  const [id, ssr] = useServerRun();
   if (ssr) return ssr.state(id, () => initialOf(initial));
   let correction = NO_CORRECTION;
   const [value, set] = React.useState(() => {
@@ -149,8 +151,7 @@ export function useState(initial) {
 }
 
 export function useReducer(reducer, initialArg, init) {
-  const id = React.useId();
-  const ssr = React.useContext(SsrEffectsContext);
+  const [id, ssr] = useServerRun();
   const initial = () => (init ? init(initialArg) : initialArg);
   if (ssr) return ssr.reducer(id, reducer, initial);
   const [value, dispatch] = React.useReducer(reducer, undefined, () => hydrated(id, initial).value);
@@ -159,29 +160,25 @@ export function useReducer(reducer, initialArg, init) {
 }
 
 export function useRef(initial) {
-  const id = React.useId();
-  const ssr = React.useContext(SsrEffectsContext);
+  const [id, ssr] = useServerRun();
   if (ssr) return ssr.ref(id, initial);
   return React.useRef(initial);
 }
 
 export function useMemo(create, deps) {
-  const id = React.useId();
-  const ssr = React.useContext(SsrEffectsContext);
+  const [id, ssr] = useServerRun();
   if (ssr) return ssr.memo(id, create, deps);
   return React.useMemo(create, deps);
 }
 
 export function useCallback(callback, deps) {
-  const id = React.useId();
-  const ssr = React.useContext(SsrEffectsContext);
+  const [id, ssr] = useServerRun();
   if (ssr) return ssr.memo(id, () => callback, deps);
   return React.useCallback(callback, deps);
 }
 
 export function useEffect(effect, deps) {
-  const id = React.useId();
-  const ssr = React.useContext(SsrEffectsContext);
+  const [id, ssr] = useServerRun();
   if (ssr) return ssr.effect(id, effect, deps);
   return React.useEffect(
     hydrating
@@ -195,8 +192,7 @@ export function useEffect(effect, deps) {
 }
 
 export function useLayoutEffect(effect, deps) {
-  const id = React.useId();
-  const ssr = React.useContext(SsrEffectsContext);
+  const [id, ssr] = useServerRun();
   if (ssr) return ssr.effect(id, effect, deps);
   return React.useLayoutEffect(effect, deps);
 }

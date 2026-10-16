@@ -45,13 +45,6 @@ const withTimeout = (promise) => {
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 };
-const read = (key, call, shape) => {
-  const hit = cache.get(key);
-  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value);
-  // Identical reads in flight (two crawlers on one page) share a single request.
-  if (!inflight.has(key)) inflight.set(key, fetchFresh(key, call, shape).finally(() => inflight.delete(key)));
-  return inflight.get(key);
-};
 const fetchFresh = async (key, call, shape) => {
   let value;
   try {
@@ -74,6 +67,13 @@ const fetchFresh = async (key, call, shape) => {
   if (cache.size >= MAX_ENTRIES) cache.delete(cache.keys().next().value);
   cache.set(key, { value, expires: Date.now() + (empty ? MISSING_TTL_MS : FOUND_TTL_MS) });
   return value;
+};
+const read = (key, call, shape) => {
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value);
+  // Identical reads in flight (two crawlers on one page) share a single request.
+  if (!inflight.has(key)) inflight.set(key, fetchFresh(key, call, shape).finally(() => inflight.delete(key)));
+  return inflight.get(key);
 };
 const entity = (name) => {
   const api = vibex.entities[name];

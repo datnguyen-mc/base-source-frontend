@@ -1,7 +1,7 @@
 // First: the SDK keeps a reference to fetch when it is created (src/seo/fetch-hook.js).
 import '@/seo/fetch-hook';
 import { config, isNoindexPath, listPaths, resolvePage, site, siteUrlOf, staticPaths } from '@/seo/engine';
-import { injectPage, renderBody, renderHead, renderRobots as robots, renderSitemap as sitemap } from '@/seo/head';
+import { injectPage, renderBody, renderHead, renderRobots as robotsTxt, renderSitemap as sitemapXml } from '@/seo/head';
 // SSR entry: loaded by server.js (SSR), scripts/prerender.js (SSG) and vite-plugins/seo-plugin.js
 // (index.html, SPA robots/sitemap). Meta comes from src/seo.config.js and src/seo.routes.js; the
 // page body is the real React app (src/seo/render-app.jsx), hydrated in the browser.
@@ -79,12 +79,14 @@ export async function render(url, { fallbackUrl } = {}) {
     timings: { ...timings, ...result.timings },
   };
 }
+
 export { injectPage, listPaths, siteUrlOf };
+export const renderRobots = ({ fallbackUrl } = {}) => robotsTxt(config, siteUrlOf(fallbackUrl));
 // `paths` defaults to every indexable URL; build:ssg passes the pages it actually wrote.
 export const renderSitemap = async ({ fallbackUrl, paths } = {}) =>
-  sitemap(config, paths || (await listPaths()), siteUrlOf(fallbackUrl));
-export const renderRobots = ({ fallbackUrl } = {}) => robots(config, siteUrlOf(fallbackUrl));
+  sitemapXml(config, paths || (await listPaths()), siteUrlOf(fallbackUrl));
+// Static routes only: the SPA build and `vite` dev have no data to list the dynamic ones.
+export const renderStaticSitemap = ({ fallbackUrl } = {}) => sitemapXml(config, staticPaths(), siteUrlOf(fallbackUrl));
 // index.html in the SPA build: served for every route, so site-wide tags only (no canonical).
 export const renderIndexHead = () => renderHead({}, site, siteUrlOf(''), undefined);
 export const siteLang = () => site.lang || 'en';
-export const renderStaticSitemap = ({ fallbackUrl } = {}) => sitemap(config, staticPaths(), siteUrlOf(fallbackUrl));

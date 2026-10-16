@@ -10,13 +10,14 @@ const ssrDir = path.join(root, 'dist-ssr');
 const CONCURRENCY = 8;
 // An effect a page render ran (src/seo/server-effects.js) that reaches for `window` after an
 // `await` rejects with nobody to catch it: expected — the browser runs it again — not a failure.
+const inServerEffect = () => Boolean(globalThis[Symbol.for('vibex.ssr.effects')]?.current());
 process.on('unhandledRejection', (reason) => {
-  if (globalThis[Symbol.for('vibex.ssr.effects')]?.current()) return;
+  if (inServerEffect()) return;
   console.error('[ssg] unhandled promise rejection:', reason);
   process.exitCode = 1;
 });
 process.on('uncaughtException', (err) => {
-  if (globalThis[Symbol.for('vibex.ssr.effects')]?.current()) return;
+  if (inServerEffect()) return;
   console.error(err);
   process.exit(1);
 });
@@ -49,7 +50,7 @@ try {
   // The SPA page with site defaults, for host rewrites of paths that were not prerendered.
   await fs.writeFile(path.join(distDir, 'spa.html'), template);
   const paths = await entry.listPaths();
-  const written = [];
+  const written = new Set();
   const failed = [];
   let next = 0;
   const worker = async () => {
@@ -69,7 +70,7 @@ try {
         const html = entry.injectPage(template, page);
         await fs.mkdir(path.dirname(file), { recursive: true });
         await fs.writeFile(file, html);
-        written.push(urlPath);
+        written.add(urlPath);
         console.log(`[ssg] ${urlPath} → ${path.relative(root, file)}`);
       } catch (err) {
         failed.push(urlPath);
@@ -81,10 +82,11 @@ try {
 
   await fs.writeFile(path.join(distDir, 'robots.txt'), entry.renderRobots());
   if (siteUrl) {
-    const ordered = paths.filter((p) => written.includes(p));
+    // In the order listPaths() gave, not the order the workers finished in.
+    const ordered = paths.filter((p) => written.has(p));
     await fs.writeFile(path.join(distDir, 'sitemap.xml'), await entry.renderSitemap({ paths: ordered }));
   }
-  console.log(`[ssg] ${written.length} page(s) written to dist/${siteUrl ? ' with sitemap.xml' : ''}`);
+  console.log(`[ssg] ${written.size} page(s) written to dist/${siteUrl ? ' with sitemap.xml' : ''}`);
   if (failed.length) {
     console.error(`[ssg] ${failed.length} page(s) failed: ${failed.join(', ')}`);
     process.exitCode = 1;
