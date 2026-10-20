@@ -2,6 +2,8 @@
 // SEO CONFIG — site-wide settings. Per-page meta lives in src/seo.routes.js.
 //   • site    → default <head> of index.html (title, description, icons, Open Graph, lang)
 //   • robots  → robots.txt        • sitemap → sitemap.xml        (every build mode)
+//     — each only when public/ has no file of that name: the base ships public/robots.txt, so
+//     robots rules are edited there (served as it is).
 // ─────────────────────────────────────────────────────────────────────────────────────────
 export default {
   site: {
@@ -25,6 +27,7 @@ export default {
   // every page in src/pages.config.js has a route in src/seo.routes.js.
   strict: false,
 
+  // Generates robots.txt only when public/robots.txt is missing (the base ships one: edit that).
   robots: {
     disallow: ['/admin'],
     // allow: ['/'], extra: ['Crawl-delay: 10'],

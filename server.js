@@ -74,8 +74,14 @@ const spaShell = async (template) => {
 };
 
 // robots.txt / sitemap.xml the app ships in public/ (e.g. uploaded by its owner) are served as they
-// are; only a missing one is generated. null when there is none.
-const shipped = (name) => fs.readFile(path.join(root, 'public', name), 'utf-8').catch(() => null);
+// are, byte for byte (a Buffer: a file that is not UTF-8 is not re-encoded); only a missing one is
+// generated. null when there is none. Production reads them once at start, like the build's
+// index.html — a new upload comes with a new build, and so a restart; dev:ssr on every request.
+const readShipped = (name) => fs.readFile(path.join(root, 'public', name)).catch(() => null);
+const shippedAtStart = isProduction
+  ? { 'robots.txt': await readShipped('robots.txt'), 'sitemap.xml': await readShipped('sitemap.xml') }
+  : null;
+const shipped = async (name) => (shippedAtStart ? shippedAtStart[name] : readShipped(name));
 
 // Registered before the static/Vite middleware, which would otherwise serve a static copy.
 app.get('/robots.txt', async (req, res) => {

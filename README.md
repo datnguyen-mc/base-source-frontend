@@ -133,6 +133,11 @@ the next build — search engine verification files (`naver….html`, `google…
 `public/robots.txt` or `public/sitemap.xml` replaces the generated one in every build mode, and
 only a missing one is generated.
 
+The base ships a default `public/robots.txt` (allow everything, block `/admin`), served as it
+is — edit or replace it per app (to point crawlers to the sitemap, add its full URL:
+`Sitemap: https://my-app.example/sitemap.xml`); delete it to have one generated from
+`src/seo.config.js`.
+
 `index.html` stays a plain HTML file — no placeholders. The SEO tags it already has (title,
 description, Open Graph, Twitter, canonical…) are replaced, and the new ones appended before
 `</head>`; the crawlable HTML goes into `<div id="root">`. Tags the config does not provide
