@@ -54,7 +54,9 @@ The app will be available at **http://localhost:5173**
 
 Environment variables:
 
-- `VITE_APP_ENV=production` at build time drops the dev-only Vite plugins.
+- `VITE_APP_ENV=production` at build time drops the dev-only Vite plugins (visual editing: source
+  attributes on every element, the Tailwind CDN script). `build:ssr` and `build:ssg` set it
+  themselves — they only make sites to serve; set `VITE_APP_ENV` to something else to keep the plugins.
 - `SITE_URL` — public origin (overrides `site.url` in `src/seo.config.js`). Without either,
   SSR uses the request host and SSG writes no canonical URLs and no sitemap.
 - `PORT` (SSR) — default `5173`, the same port `npm run dev` uses. HMR in `dev:ssr` rides this port too.
@@ -87,7 +89,11 @@ VITE_APP_ENV=production npm run build:ssr && PORT=5173 npm run start:ssr
 | File | Controls |
 |---|---|
 | `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `robots.txt`, `sitemap.xml`, `strict` 404s |
-| `src/seo.routes.js` | **Every page, one file**: title, description, image, `type` (og:type), `content`, `items`, `breadcrumbs`, `canonical`, `noindex`, `load()` for data, `paths()` for dynamic URLs — field list in the file header |
+| `src/seo.routes.js` | **Every page, one file**: title, description, image, `type` (og:type), `content`, `items`, `breadcrumbs`, `canonical`, `noindex`, `imageAlt`, `author`, `alternates` (hreflang), extra `meta` / `links`, `jsonLd`, `load()` for data, `paths()` for dynamic URLs — field list in the file header |
+
+Structured data (JSON-LD) comes with it: `WebSite` on the home page (with a search box when
+`site.searchUrl` is set), `BreadcrumbList` from `breadcrumbs`, and whatever a route returns as
+`jsonLd` (`@context` is added) — never on `noindex` pages.
 
 ```js
 // src/seo.routes.js
@@ -109,14 +115,17 @@ export default [
 `entities.X.get(id)` / `.list({ filter, sort, limit })` / `.findOne(filter)` are the app's own
 entities, returning plain rows — `null` / `[]` when there is no data; return `null` from `load`
 for a 404. When the backend itself is down, SSR answers **503** with the SPA shell (crawlers
-retry instead of dropping the page) and `build:ssg` fails. The same files also set the browser
-tab title and description — no per-page code needed.
+retry instead of dropping the page) and `build:ssg` fails. The same files also keep the head
+right in the browser — no per-page code needed: on every navigation `src/seo/client.js` renders
+the page's head with the same `renderHead()` the server uses. Every tag it writes carries
+`data-seo`; the browser swaps exactly those for the next page's (whatever tags a route declares,
+JSON-LD included), and puts `index.html`'s own tags aside only while a page has its own of that kind.
 
 | Build | First HTML response | In the browser | robots.txt | sitemap.xml |
 |---|---|---|---|---|
-| SPA | site defaults | per-route title + description | ✓ | static routes (needs `site.url`) |
-| SSR | per-route head + crawlable HTML | per-route title on navigation | ✓ | static + `paths()` |
-| SSG | per-route head + crawlable HTML | per-route title on navigation | ✓ | pages actually built |
+| SPA | site defaults | per-route head | ✓ | static routes (needs `site.url`) |
+| SSR | per-route head + crawlable HTML | per-route head on navigation | ✓ | static + `paths()` |
+| SSG | per-route head + crawlable HTML | per-route head on navigation | ✓ | pages actually built |
 
 `index.html` stays a plain HTML file — no placeholders. The SEO tags it already has (title,
 description, Open Graph, Twitter, canonical…) are replaced, and the new ones appended before
@@ -275,5 +284,6 @@ a server-rendered page: it renders as a signed-out visitor sees it, then updates
 | An effect keeps changing state | At most 8 render passes; each effect re-runs at most 3 times |
 | A pass breaks once the data is in | The last pass that rendered is sent |
 | A motion element starts hidden (`initial={{ opacity: 0 }}`, `initial="hidden"`) | Rendered at its final state on the server and while hydrating; animates after navigation |
+| A page shows an email address and the site is behind Cloudflare (Email Obfuscation) | Cloudflare rewrites it in the HTML; `src/seo/cloudflare.js` puts it back before hydrating, so the page hydrates as rendered |
 | Server and browser markup differ | React re-renders in the browser; logged as a warning, not a crash |
 

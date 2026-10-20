@@ -43,6 +43,44 @@ const tag = (name, attrs) =>
   `<${name} ${Object.entries(attrs)
     .map(([key, value]) => `${key}="${escapeHtml(value)}"`)
     .join(' ')}>`;
+// Every tag renderHead() writes carries data-seo: on navigation the browser swaps exactly these
+// for the next page's (src/seo/client.js) — whatever a page declares — and leaves the rest alone.
+const seoTag = (name, attrs) => tag(name, { ...attrs, 'data-seo': '' });
+// `<` escaped, so no text in the data can close the <script>.
+const jsonLdTag = (data) =>
+  `<script type="application/ld+json" data-seo="">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
+const list = (value) => [].concat(value || []).filter(Boolean);
+const SCHEMA = 'https://schema.org';
+/** schema.org data of a page: WebSite on the home page, BreadcrumbList from `breadcrumbs`, `jsonLd`. */
+const structuredData = (page, site, siteUrl, path) => {
+  if (page.noindex) return [];
+  const crumbs = list(page.breadcrumbs).filter((crumb) => crumb.name && crumb.url);
+  return [
+    // The site name (and search box, with site.searchUrl) Google shows for the site.
+    path === '/' && siteUrl && site.name && {
+      '@context': SCHEMA,
+      '@type': 'WebSite',
+      name: site.name,
+      url: `${siteUrl}/`,
+      ...(site.searchUrl && {
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: { '@type': 'EntryPoint', urlTemplate: absolute(site.searchUrl, siteUrl) },
+          'query-input': 'required name=search_term_string',
+        },
+      }),
+    },
+    crumbs.length > 0 && {
+      '@context': SCHEMA,
+      '@type': 'BreadcrumbList',
+      itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: absolute(crumb.url, siteUrl) })),
+    },
+    ...list(page.jsonLd).map((data) => ({ '@context': SCHEMA, ...data })),
+  ].filter(Boolean);
+};
+// { vi: '/vi/about', en: '/about' } or [{ hreflang, href }]
+const alternatesOf = (value) =>
+  Array.isArray(value) ? value : Object.entries(value || {}).map(([hreflang, href]) => ({ hreflang, href }));
 const OG_TYPES = { article: 'article', product: 'product', profile: 'profile' };
 /**
  * The page's <head> tags (see injectPage). `path` is the page the head was rendered for
@@ -60,31 +98,42 @@ export function renderHead(page, site, siteUrl, path) {
   const article = ogType === 'article';
   const published = article && isoDate(page.publishedAt);
   const modified = article && isoDate(page.updatedAt);
+  const imageAlt = image && page.imageAlt;
   const lines = [
-    `<title data-seo-path="${escapeHtml(path || '')}">${escapeHtml(title)}</title>`,
-    description && tag('meta', { name: 'description', content: description }),
-    keywords && tag('meta', { name: 'keywords', content: keywords }),
-    tag('meta', { name: 'robots', content: page.noindex ? 'noindex' : 'index, follow, max-image-preview:large' }),
-    canonical && tag('link', { rel: 'canonical', href: canonical }),
-    site.favicon && tag('link', { rel: 'icon', href: site.favicon }),
-    site.appleTouchIcon && tag('link', { rel: 'apple-touch-icon', href: site.appleTouchIcon }),
-    site.themeColor && tag('meta', { name: 'theme-color', content: site.themeColor }),
-    tag('meta', { property: 'og:site_name', content: site.name }),
-    tag('meta', { property: 'og:type', content: ogType }),
-    tag('meta', { property: 'og:title', content: title }),
-    description && tag('meta', { property: 'og:description', content: description }),
-    image && tag('meta', { property: 'og:image', content: image }),
-    canonical && tag('meta', { property: 'og:url', content: canonical }),
-    locale && tag('meta', { property: 'og:locale', content: locale }),
-    published && tag('meta', { property: 'article:published_time', content: published }),
-    modified && tag('meta', { property: 'article:modified_time', content: modified }),
-    article && page.author && tag('meta', { property: 'article:author', content: page.author }),
-    article && page.section && tag('meta', { property: 'article:section', content: page.section }),
-    tag('meta', { name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' }),
-    site.twitterSite && tag('meta', { name: 'twitter:site', content: site.twitterSite }),
-    tag('meta', { name: 'twitter:title', content: title }),
-    description && tag('meta', { name: 'twitter:description', content: description }),
-    image && tag('meta', { name: 'twitter:image', content: image }),
+    `<title data-seo="" data-seo-path="${escapeHtml(path || '')}">${escapeHtml(title)}</title>`,
+    description && seoTag('meta', { name: 'description', content: description }),
+    keywords && seoTag('meta', { name: 'keywords', content: keywords }),
+    page.author && seoTag('meta', { name: 'author', content: page.author }),
+    seoTag('meta', { name: 'robots', content: page.noindex ? 'noindex' : 'index, follow, max-image-preview:large' }),
+    canonical && seoTag('link', { rel: 'canonical', href: canonical }),
+    ...(page.noindex ? [] : alternatesOf(page.alternates))
+      .filter((alt) => alt.hreflang && alt.href)
+      .map((alt) => seoTag('link', { rel: 'alternate', hreflang: alt.hreflang, href: absolute(alt.href, siteUrl) })),
+    site.favicon && seoTag('link', { rel: 'icon', href: site.favicon }),
+    site.appleTouchIcon && seoTag('link', { rel: 'apple-touch-icon', href: site.appleTouchIcon }),
+    site.themeColor && seoTag('meta', { name: 'theme-color', content: site.themeColor }),
+    seoTag('meta', { property: 'og:site_name', content: site.name }),
+    seoTag('meta', { property: 'og:type', content: ogType }),
+    seoTag('meta', { property: 'og:title', content: title }),
+    description && seoTag('meta', { property: 'og:description', content: description }),
+    image && seoTag('meta', { property: 'og:image', content: image }),
+    imageAlt && seoTag('meta', { property: 'og:image:alt', content: imageAlt }),
+    canonical && seoTag('meta', { property: 'og:url', content: canonical }),
+    locale && seoTag('meta', { property: 'og:locale', content: locale }),
+    published && seoTag('meta', { property: 'article:published_time', content: published }),
+    modified && seoTag('meta', { property: 'article:modified_time', content: modified }),
+    article && page.author && seoTag('meta', { property: 'article:author', content: page.author }),
+    article && page.section && seoTag('meta', { property: 'article:section', content: page.section }),
+    seoTag('meta', { name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' }),
+    site.twitterSite && seoTag('meta', { name: 'twitter:site', content: site.twitterSite }),
+    seoTag('meta', { name: 'twitter:title', content: title }),
+    description && seoTag('meta', { name: 'twitter:description', content: description }),
+    image && seoTag('meta', { name: 'twitter:image', content: image }),
+    imageAlt && seoTag('meta', { name: 'twitter:image:alt', content: imageAlt }),
+    // Anything else a page declares: product:price:amount, prev/next links…
+    ...list(page.meta).map((attrs) => seoTag('meta', attrs)),
+    ...list(page.links).map((attrs) => seoTag('link', attrs.href ? { ...attrs, href: absolute(attrs.href, siteUrl) } : attrs)),
+    ...structuredData(page, site, siteUrl, path).map(jsonLdTag),
   ];
   return lines.filter(Boolean).join('\n    ');
 }
@@ -100,14 +149,22 @@ const keyOf = (tag) => {
     const property = attrOf(tag, 'property');
     return name ? `name:${name}` : property ? `property:${property}` : null;
   }
-  if (/^<link/i.test(tag)) return attrOf(tag, 'rel') ? `rel:${attrOf(tag, 'rel')}` : null;
+  if (/^<link/i.test(tag)) {
+    // One hreflang alternate per language — and none of them is an RSS <link rel="alternate">.
+    const rel = attrOf(tag, 'rel');
+    const lang = attrOf(tag, 'hreflang');
+    return rel ? `rel:${rel}${lang ? `:${lang}` : ''}` : null;
+  }
   return null;
 };
 // Dropped from index.html even when the new head has no replacement: tags about one URL, and
 // empty ones (an empty icon href even makes the browser fetch the page itself as the icon).
 const isEmpty = (tag) => /\s(?:content|href)\s*=\s*["']\s*["']/i.test(tag);
 const pageSpecific = (key) =>
-  ['name:title', 'rel:canonical', 'property:og:url', 'name:robots'].includes(key) || key.startsWith('property:article:');
+  ['name:title', 'rel:canonical', 'property:og:url', 'name:twitter:url', 'name:robots'].includes(key) ||
+  key.startsWith('property:article:');
+/** Key of one head tag's HTML ('title', 'name:description', 'property:og:image', 'rel:canonical'…), or null. */
+export const headTagKey = keyOf;
 /** index.html with the page's head tags and crawlable HTML (`html`, inserted into #root). */
 export function injectPage(template, { head = '', html = '' } = {}) {
   const end = template.search(/<\/head>/i);

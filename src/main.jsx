@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import '@/index.css'
 import { setupIframeMessaging, markHmrQuiet } from '@/lib/iframe-messaging';
 import { setupGoogleTranslateGuard } from '@/lib/google-translate-guard';
+import { undoEmailObfuscation } from '@/seo/cloudflare';
 
 // Patch DOM methods before React renders (must run before render)
 setupGoogleTranslateGuard();
@@ -17,6 +18,8 @@ setupIframeMessaging();
 // A server-rendered page (SSR / SSG) is hydrated; otherwise the SPA renders from scratch.
 const container = document.getElementById('root');
 if (window.__staticRouterHydrationData) {
+  // Behind Cloudflare, email addresses in the HTML are not the ones the server rendered.
+  undoEmailObfuscation(container);
   ReactDOM.hydrateRoot(container, <App />, {
     // A mismatch (e.g. a widget that renders differently in the browser) is repaired by React
     // re-rendering on the client — a warning, not a crash for the error reporters to flag.

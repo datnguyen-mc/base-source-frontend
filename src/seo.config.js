@@ -16,6 +16,9 @@ export default {
     appleTouchIcon: '',
     themeColor: '',
     twitterSite: '', // e.g. '@myapp'
+    // Site search, for the search box in Google results (WebSite JSON-LD on the home page),
+    // e.g. '/search?q={search_term_string}'. Leave empty when the app has no search page.
+    searchUrl: '',
   },
 
   // true → a path matching no route is answered with HTTP 404 + noindex (SSR). Turn on once
