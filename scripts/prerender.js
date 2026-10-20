@@ -80,13 +80,20 @@ try {
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-  await fs.writeFile(path.join(distDir, 'robots.txt'), entry.renderRobots());
-  if (siteUrl) {
+  // A robots.txt / sitemap.xml the app ships in public/ (e.g. uploaded) is already in dist/ — the
+  // client build copied it — and stays as it is; only a missing one is generated.
+  const shipped = (name) => fs.stat(path.join(root, 'public', name)).then((s) => s.isFile(), () => false);
+  const ownRobots = await shipped('robots.txt');
+  const ownSitemap = await shipped('sitemap.xml');
+  if (!ownRobots) await fs.writeFile(path.join(distDir, 'robots.txt'), entry.renderRobots());
+  if (siteUrl && !ownSitemap) {
     // In the order listPaths() gave, not the order the workers finished in.
     const ordered = paths.filter((p) => written.has(p));
     await fs.writeFile(path.join(distDir, 'sitemap.xml'), await entry.renderSitemap({ paths: ordered }));
   }
-  console.log(`[ssg] ${written.size} page(s) written to dist/${siteUrl ? ' with sitemap.xml' : ''}`);
+  const kept = [ownRobots && 'robots.txt', ownSitemap && 'sitemap.xml'].filter(Boolean);
+  const sitemapNote = !ownSitemap && siteUrl ? ' with sitemap.xml' : '';
+  console.log(`[ssg] ${written.size} page(s) written to dist/${sitemapNote}${kept.length ? ` (public/ ${kept.join(', ')} kept)` : ''}`);
   if (failed.length) {
     console.error(`[ssg] ${failed.length} page(s) failed: ${failed.join(', ')}`);
     process.exitCode = 1;

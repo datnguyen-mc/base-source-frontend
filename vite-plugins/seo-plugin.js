@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parseAst, runnerImport } from 'vite';
 
@@ -6,6 +7,8 @@ import { parseAst, runnerImport } from 'vite';
 //     (dev:ssr is left alone: server.js puts each page's own head in per request)
 //   • SPA build  — emits robots.txt and sitemap.xml (static routes; SSR/SSG add dynamic ones)
 //   • `vite` dev — serves /robots.txt and /sitemap.xml, full-reloads when the config changes
+// A robots.txt / sitemap.xml the app ships in public/ (e.g. uploaded) wins: it is served / copied
+// as it is, and only a missing one is generated.
 // The SEO modules are loaded through Vite (aliases, imports all work): the dev server's SSR
 // loader while serving, a one-off module runner during `vite build`.
 const ENTRY = '/src/entry-server.js';
@@ -121,6 +124,8 @@ export function seoPlugin() {
     }).then((result) => result.module);
     return buildEntry;
   };
+  const shipped = async (name) =>
+    Boolean(resolved.publicDir) && (await fs.stat(path.join(resolved.publicDir, name)).then((s) => s.isFile(), () => false));
   return {
     name: 'vibex-seo',
     configResolved(config) {
@@ -151,6 +156,8 @@ export function seoPlugin() {
       });
       server.middlewares.use(async (req, res, next) => {
         if (req.url !== '/robots.txt' && req.url !== '/sitemap.xml') return next();
+        // The app ships its own in public/: Vite serves it as it is.
+        if (await shipped(req.url.slice(1))) return next();
         const entry = await loadEntry();
         const fallbackUrl = `http://${req.headers.host}`;
         const isRobots = req.url === '/robots.txt';
@@ -161,7 +168,9 @@ export function seoPlugin() {
     async generateBundle() {
       if (resolved.build.ssr) return;
       const entry = await loadEntry();
-      this.emitFile({ type: 'asset', fileName: 'robots.txt', source: entry.renderRobots() });
+      // One the app ships in public/ is copied into the build as it is: nothing to generate.
+      if (!(await shipped('robots.txt'))) this.emitFile({ type: 'asset', fileName: 'robots.txt', source: entry.renderRobots() });
+      if (await shipped('sitemap.xml')) return;
       if (entry.siteUrlOf('')) {
         this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: entry.renderStaticSitemap() });
       } else {

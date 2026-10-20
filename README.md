@@ -127,6 +127,12 @@ JSON-LD included), and puts `index.html`'s own tags aside only while a page has 
 | SSR | per-route head + crawlable HTML | per-route head on navigation | ✓ | static + `paths()` |
 | SSG | per-route head + crawlable HTML | per-route head on navigation | ✓ | pages actually built |
 
+Files in `public/` (e.g. uploaded by the app's owner) are served at `/<name>` as they are after
+the next build — search engine verification files (`naver….html`, `google….html`,
+`BingSiteAuth.xml`), `.well-known/…`, and also `robots.txt` / `sitemap.xml`: an app's own
+`public/robots.txt` or `public/sitemap.xml` replaces the generated one in every build mode, and
+only a missing one is generated.
+
 `index.html` stays a plain HTML file — no placeholders. The SEO tags it already has (title,
 description, Open Graph, Twitter, canonical…) are replaced, and the new ones appended before
 `</head>`; the crawlable HTML goes into `<div id="root">`. Tags the config does not provide

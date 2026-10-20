@@ -73,8 +73,14 @@ const spaShell = async (template) => {
   return entry ? entry.injectPage(template, { head: entry.renderIndexHead() }) : template;
 };
 
+// robots.txt / sitemap.xml the app ships in public/ (e.g. uploaded by its owner) are served as they
+// are; only a missing one is generated. null when there is none.
+const shipped = (name) => fs.readFile(path.join(root, 'public', name), 'utf-8').catch(() => null);
+
 // Registered before the static/Vite middleware, which would otherwise serve a static copy.
 app.get('/robots.txt', async (req, res) => {
+  const own = await shipped('robots.txt');
+  if (own !== null) return res.type('text/plain').send(own);
   const { renderRobots } = await loadEntry();
   res.type('text/plain').send(renderRobots({ fallbackUrl: originOf(req) }));
 });
@@ -82,6 +88,12 @@ app.get('/robots.txt', async (req, res) => {
 const sitemapCache = new Map();
 app.get('/sitemap.xml', async (req, res) => {
   const started = performance.now();
+  const own = await shipped('sitemap.xml');
+  if (own !== null) {
+    res.type('application/xml').send(own);
+    logPage(req, 200, 'sitemap (public/sitemap.xml)', started);
+    return;
+  }
   try {
     const origin = originOf(req);
     let hit = sitemapCache.get(origin);
