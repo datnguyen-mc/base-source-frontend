@@ -67,18 +67,6 @@ const devStylesheets = () =>
     .filter((mod) => mod.url && /\.(css|scss|sass|less|styl)$/.test(mod.file || ''))
     .map((mod) => `<link rel="stylesheet" href="${mod.url}?direct" data-ssr-dev-css>`)
     .join('\n');
-// Production — the build's stylesheets go into the page itself: a <link> keeps the page white
-// until that file has arrived (nothing is painted before a render-blocking stylesheet), seconds
-// after the HTML on a slow connection. Its url()s are absolute (/assets/…), so fonts and images
-// resolve the same; '</style' is escaped so the CSS can never close the tag.
-const inlineStylesheets = async (html) => {
-  const links = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*\bhref="(\/assets\/[^"]+\.css)"[^>]*>/g)];
-  for (const [tag, href] of links) {
-    const css = await fs.readFile(path.join(root, 'dist/client', href), 'utf-8');
-    html = html.replace(tag, () => `<style>${css.replaceAll('</style', '<\\/style')}</style>`);
-  }
-  return html;
-};
 // The SPA page with the site-wide head — what people get when a page cannot be rendered.
 const spaShell = async (template) => {
   const entry = await loadEntry().catch(() => null);
@@ -134,7 +122,7 @@ app.get('/sitemap.xml', async (req, res) => {
 if (isProduction) {
   const compression = (await import('compression')).default;
   const sirv = (await import('sirv')).default;
-  prodTemplate = await inlineStylesheets(await fs.readFile(path.join(root, 'dist/client/index.html'), 'utf-8'));
+  prodTemplate = await fs.readFile(path.join(root, 'dist/client/index.html'), 'utf-8');
   prodEntry = await import('./dist/server/entry-server.js');
   if (!prodEntry.siteUrlOf('')) {
     console.warn('[ssr] site.url (src/seo.config.js) / SITE_URL is not set — canonical URLs use the request host.');

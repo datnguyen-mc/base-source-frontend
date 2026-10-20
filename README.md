@@ -77,11 +77,6 @@ Environment variables:
 | `sitemap.xml` | Built sitemap | 10 min |
 | `/assets/*` | Hashed JS / CSS, gzip / brotli | 1 year, `immutable` |
 
-The production server puts the build's CSS into every page (`<style>`) instead of a `<link>`:
-a render-blocking stylesheet keeps the page white until it arrives — on a slow connection, seconds
-after the HTML. Each full page load carries the CSS (gzipped with the page); navigating inside the
-app does not load HTML again.
-
 ```bash
 VITE_APP_ENV=production SITE_URL=https://example.com npm run build:ssg
 VITE_APP_ENV=production npm run build:ssr && PORT=5173 npm run start:ssr
