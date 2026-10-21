@@ -49,7 +49,7 @@ The app will be available at **http://localhost:5173**
 | Mode | Build | Run / deploy | Use when |
 |---|---|---|---|
 | SPA | `npm run build` | Upload `dist/`, rewrite every path to `/index.html` | Admin tools, apps behind login — SEO does not matter |
-| SSR | `npm run build:ssr` | `npm run start:ssr` on Node ≥ 20.19 | Public content that changes often (posts, products) |
+| SSR | `npm run build:ssr` | Deploy `server.prod.mjs`, `dist/`, `public/`, `package.json` — no `node_modules` — and run `npm run start:prod` on Node ≥ 20.19 (`npm run start:ssr`: the same from `server.js`, with `node_modules`) | Public content that changes often (posts, products) |
 | SSG | `npm run build:ssg` | Upload `dist/`, rewrite unknown paths to `/spa.html` | Public pages known at build time, no Node server |
 
 Environment variables:
@@ -73,11 +73,16 @@ spinner in its place) and, in the build, links the app's stylesheet right after 
 in `<head>`; `src/loaded.css`, bundled into that stylesheet, lets the page go. Other stylesheets
 linked in `index.html`'s `<head>` (e.g. Google Fonts) still hold the first paint.
 
-Memory (SSR): `npm run start:ssr` runs Node with `--max-semi-space-size=1 --optimize-for-size` and
-`MALLOC_ARENA_MAX=2` — a smaller V8 young generation and fewer glibc arenas, so a server under
-traffic keeps far less memory (a little more GC). A pod that starts `node server.js --prod` itself
-needs the same flags and env. The build also writes `.br` / `.gz` copies of its files, which the
-server sends as they are instead of compressing each response.
+Published SSR server: `build:ssr` bundles every package the render uses into `dist/server`
+(`ssr.noExternal`) and server.js with express / compression / sirv into `server.prod.mjs`
+(`vite-plugins/server-bundle-plugin.js`), so it runs without `node_modules`. A package with a
+native addon, or one reading its own files at run time, may need a fix there (jsdom has one).
+
+Memory (SSR): `start:prod` / `start:ssr` run Node with `--max-semi-space-size=1 --optimize-for-size`
+and `MALLOC_ARENA_MAX=2` — a smaller V8 young generation and fewer glibc arenas, so a server under
+traffic keeps far less memory (a little more GC). A pod that starts `node server.prod.mjs --prod`
+itself needs the same flags and env. The build also writes `.br` / `.gz` copies of its files, which
+the server sends as they are instead of compressing each response.
 
 ### Caching (SSR)
 

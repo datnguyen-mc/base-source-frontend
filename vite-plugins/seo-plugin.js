@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { parseAst, runnerImport } from 'vite';
 
@@ -23,9 +24,12 @@ const SCRIPT = /\.[cm]?[jt]sx?$/;
 const BROWSER_ONLY = [
   'quill', 'react-quill', 'react-quill-new', '@toast-ui/editor', '@toast-ui/react-editor',
   'leaflet', 'react-leaflet', 'mapbox-gl', 'maplibre-gl', 'react-map-gl', '@react-google-maps/api',
-  'html5-qrcode', 'html2canvas', 'jspdf', 'pdfjs-dist', 'react-pdf', '@ffmpeg/ffmpeg', '@ffmpeg/util',
+  'html5-qrcode', 'html2canvas', 'jspdf', 'pdfjs-dist', 'react-pdf', '@react-pdf/renderer', '@ffmpeg/ffmpeg', '@ffmpeg/util',
   'lottie-web', 'lottie-react', 'apexcharts', 'react-apexcharts', 'wavesurfer.js', 'video.js', 'plyr',
   'fabric', 'konva', 'react-konva', 'xterm', '@xterm/xterm', 'grapesjs', 'tui-image-editor',
+  // Native addons: no browser runs them, and the published server (one bundle, no node_modules)
+  // cannot load them — imported by a page, they would keep every page from rendering on the server.
+  'sharp', 'canvas', 'bcrypt', 'argon2', 'better-sqlite3', 'sqlite3',
 ];
 const packageOf = (source) => (source.startsWith('@') ? source.split('/').slice(0, 2).join('/') : source.split('/')[0]);
 const isBrowserOnly = (source) => BROWSER_ONLY.includes(packageOf(source)) && !/\.(css|scss|sass|less)$/.test(source);
@@ -111,6 +115,25 @@ const rewriteImports = (code, file) => {
 const FETCH_HOOK_IMPORT = "import '@/seo/fetch-hook';\n";
 const needsFetchHook = (file, root) => file.startsWith(`${root}/src/sdk/`) || file.startsWith(`${root}/src/api/`);
 
+// ── src/seo/server-dom.js without dompurify ──────────────────────────────────────────────────
+// It sets DOMPurify up for the server: an app without dompurify installed gets null there, not a
+// build that fails — in every build and in the runner that loads the SSR entry for index.html.
+const NO_DOMPURIFY = '\0vibex-seo:no-dompurify';
+const dompurifyFallback = {
+  resolveId(source, importer) {
+    if (source !== 'dompurify' || !importer?.split('?')[0].endsWith('/src/seo/server-dom.js')) return null;
+    try {
+      createRequire(importer).resolve('dompurify');
+      return null; // installed: resolved as usual
+    } catch {
+      return NO_DOMPURIFY;
+    }
+  },
+  load(id) {
+    return id === NO_DOMPURIFY ? 'export default null;' : null;
+  },
+};
+
 export function seoPlugin() {
   let resolved;
   let devServer;
@@ -120,6 +143,7 @@ export function seoPlugin() {
     buildEntry ??= runnerImport(ENTRY, {
       root: resolved.root,
       resolve: { alias: resolved.resolve.alias },
+      plugins: [{ name: 'vibex-seo:dompurify', ...dompurifyFallback }],
       logLevel: 'error',
     }).then((result) => result.module);
     return buildEntry;
@@ -131,6 +155,7 @@ export function seoPlugin() {
     configResolved(config) {
       resolved = config;
     },
+    ...dompurifyFallback,
     transform(code, id, options) {
       const file = id.split('?')[0];
       if (id.includes('/node_modules/') || !SCRIPT.test(file)) return null;

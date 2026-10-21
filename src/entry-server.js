@@ -1,5 +1,7 @@
 // First: the SDK keeps a reference to fetch when it is created (src/seo/fetch-hook.js).
 import '@/seo/fetch-hook';
+// Before any of the app's modules, which may call DOMPurify as they load (src/seo/server-dom.js).
+import '@/seo/server-dom';
 import { config, isNoindexPath, listPaths, resolvePage, site, siteUrlOf, staticPaths } from '@/seo/engine';
 import { injectPage, renderBody, renderHead, renderRobots as robotsTxt, renderSitemap as sitemapXml } from '@/seo/head';
 // SSR entry: loaded by server.js (SSR), scripts/prerender.js (SSG) and vite-plugins/seo-plugin.js

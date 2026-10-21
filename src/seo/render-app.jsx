@@ -1,9 +1,9 @@
-import { createRequire } from 'node:module';
 import { renderToString } from 'react-dom/server';
 import { createStaticHandler, createStaticRouter, isRouteErrorResponse, StaticRouterProvider } from 'react-router-dom';
 import { QueryClient } from '@tanstack/react-query';
 import { AppProviders, routes } from '@/App';
 import { SsrEffectsContext } from '@/seo/hooks';
+import { purifyCallsWithoutDom, serverDomLoaded } from '@/seo/server-dom';
 import { createEffectsRun } from '@/seo/server-effects';
 // Renders the real React app for one URL: page loaders run first, then the same component tree
 // the browser shows — with the data its effects load (src/seo/server-effects.js): the page is
@@ -14,28 +14,6 @@ const handler = createStaticHandler(routes);
 // Time the effects of one page get to load their data (ms), and render passes at most.
 const EFFECTS_TIMEOUT = Number(process.env.SSR_EFFECTS_TIMEOUT ?? 3000);
 const MAX_PASSES = 8;
-
-// DOMPurify needs a DOM to sanitize HTML, which Node has not: give it jsdom's (the setup DOMPurify
-// documents for Node) on the very instance the app imports, so components that sanitize while
-// rendering work on the server unchanged. jsdom costs tens of MB of memory for as long as the
-// server runs, and most apps never sanitize on the server (dompurify is often only there for
-// another package): it is loaded the first time one of DOMPurify's methods is called. (Without a
-// DOM the instance has none of them, only isSupported = false — hence the list.)
-const PURIFY_METHODS = ['sanitize', 'setConfig', 'clearConfig', 'isValidAttribute', 'addHook', 'removeHook', 'removeHooks', 'removeAllHooks'];
-let serverDomReady;
-const prepareServerDom = () =>
-  (serverDomReady ??= (async () => {
-    const purify = (await import('dompurify').catch(() => null))?.default;
-    if (!purify || purify.isSupported) return;
-    let withDom = false;
-    const setUp = () => {
-      if (withDom) return;
-      withDom = true;
-      const { JSDOM } = createRequire(import.meta.url)('jsdom');
-      Object.assign(purify, purify(new JSDOM('').window)); // the real methods, over the ones below
-    };
-    for (const name of PURIFY_METHODS) purify[name] = (...args) => (setUp(), purify[name](...args));
-  })());
 
 // Errors are not JSON: tag them the way the browser router expects to read them back.
 const serializeErrors = (errors) =>
@@ -71,7 +49,7 @@ const hydrationScript = (context, state, responses) => {
  * renderToString (all passes).
  */
 export async function renderApp(href) {
-  await prepareServerDom();
+  const purifyCallsBefore = purifyCallsWithoutDom();
   const started = performance.now();
   const context = await handler.query(new Request(href));
   const loaded = performance.now();
@@ -113,6 +91,11 @@ export async function renderApp(href) {
       if (!renderPass(final) || final) break;
       await run.settle();
       if (!run.changed()) break;
+    }
+    // DOMPurify was used before jsdom was in (the first page that sanitizes): once more with it.
+    if (purifyCallsWithoutDom() !== purifyCallsBefore) {
+      await serverDomLoaded();
+      renderPass(true);
     }
     // A state hydration could not start from would make the browser render something else.
     if (run.forgetUnshippable()) renderPass(true);

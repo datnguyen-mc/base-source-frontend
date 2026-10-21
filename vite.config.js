@@ -8,6 +8,7 @@ import { postMessageInject } from "./vite-plugins/postmessage-inject.js";
 import { seoPlugin } from "./vite-plugins/seo-plugin.js";
 import { loadingPlugin } from "./vite-plugins/loading-plugin.js";
 import { precompressPlugin } from "./vite-plugins/precompress-plugin.js";
+import { serverBundlePlugin } from "./vite-plugins/server-bundle-plugin.js";
 
 export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -22,6 +23,7 @@ export default defineConfig(({ mode, isSsrBuild }) => {
       seoPlugin(),
       loadingPlugin(),
       precompressPlugin(),
+      serverBundlePlugin(),
       ...(!isProduction
         ? [
           babelTransformPlugin(),
@@ -47,8 +49,6 @@ export default defineConfig(({ mode, isSsrBuild }) => {
       // The SSR bundle (build:ssr / build:ssg) is server code — public/ belongs to the client build only.
       copyPublicDir: !isSsrBuild,
     },
-    // Server memory: only the icons the app uses, not the whole package.
-    ...(isSsrBuild ? { ssr: { noExternal: ['lucide-react'] } } : {}),
     server: {
       port: 5173,
       allowedHosts: true,

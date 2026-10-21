@@ -147,7 +147,10 @@ app.get('/sitemap.xml', async (req, res) => {
 if (isProduction) {
   const compression = (await import('compression')).default;
   const sirv = (await import('sirv')).default;
-  prodTemplate = await fs.readFile(path.join(root, 'dist/client/index.html'), 'utf-8');
+  prodTemplate = await fs.readFile(path.join(root, 'dist/client/index.html'), 'utf-8').catch(() => {
+    console.error(`[ssr] no build in ${root} (dist/client/index.html): run \`npm run build:ssr\` first — the server needs dist/ next to it.`);
+    process.exit(1);
+  });
   prodEntry = await import('./dist/server/entry-server.js');
   if (!prodEntry.siteUrlOf('')) {
     console.warn('[ssr] site.url (src/seo.config.js) / SITE_URL is not set — canonical URLs use the request host.');
