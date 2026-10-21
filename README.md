@@ -66,6 +66,19 @@ Environment variables:
 - `SSR_EFFECTS_TIMEOUT` (SSR / SSG) — milliseconds a page's effects get to load their data on the
   server, default `3000`; past it the page is sent with what has arrived.
 
+First visit, every mode: a spinner shows until the app's stylesheet has arrived, instead of a white
+page (a stylesheet linked in `<head>` holds the first paint — seconds on a slow connection).
+`vite-plugins/loading-plugin.js` puts `src/loading.css` into `<head>` (the page held back, the
+spinner in its place) and, in the build, links the app's stylesheet right after `#root`, preloaded
+in `<head>`; `src/loaded.css`, bundled into that stylesheet, lets the page go. Other stylesheets
+linked in `index.html`'s `<head>` (e.g. Google Fonts) still hold the first paint.
+
+Memory (SSR): `npm run start:ssr` runs Node with `--max-semi-space-size=1 --optimize-for-size` and
+`MALLOC_ARENA_MAX=2` — a smaller V8 young generation and fewer glibc arenas, so a server under
+traffic keeps far less memory (a little more GC). A pod that starts `node server.js --prod` itself
+needs the same flags and env. The build also writes `.br` / `.gz` copies of its files, which the
+server sends as they are instead of compressing each response.
+
 ### Caching (SSR)
 
 | Layer | What is cached | How long |

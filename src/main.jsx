@@ -28,10 +28,6 @@ if (window.__staticRouterHydrationData) {
 } else {
   ReactDOM.createRoot(container).render(<App />);
 }
-// dev:ssr links the stylesheets so the server markup is styled before JS runs (server.js);
-// the imports above already injected Vite's own styles, which handle HMR from here on.
-document.querySelectorAll('link[data-ssr-dev-css]').forEach((link) => link.remove());
-
 if (import.meta.hot) {
   import.meta.hot.on('vite:beforeUpdate', () => {
     // Open the quiet window FIRST so transient errors during the swap/re-render

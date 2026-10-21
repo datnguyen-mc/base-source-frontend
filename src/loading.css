@@ -1,0 +1,41 @@
+/*
+ * Put into <head> as it is (vite-plugins/loading-plugin.js), so it applies before any file has
+ * arrived: a spinner instead of a white page while the app's stylesheet downloads, and while a page
+ * rendered in the browser has not rendered yet. Until that stylesheet lets it go (src/loaded.css),
+ * the page is held back — never seen unstyled, nor laid out, so its lazy images do not start
+ * loading early — for 15 s at most, should it never arrive. :where() keeps it below any app rule.
+ * Same look as the spinner App.jsx shows while auth loads.
+ */
+:where(#root > *) {
+  animation: app-hold 15s;
+}
+
+#root::before {
+  content: "";
+  content: "" / "Loading";
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  box-sizing: border-box;
+  width: 2rem;
+  height: 2rem;
+  border: 4px solid #e2e8f0;
+  border-top-color: #1e293b;
+  border-radius: 50%;
+  animation: app-loading 1s linear infinite;
+}
+
+/* visibility for browsers that cannot animate display */
+@keyframes app-hold {
+  from,
+  to {
+    display: none;
+    visibility: hidden;
+  }
+}
+
+@keyframes app-loading {
+  to {
+    transform: rotate(360deg);
+  }
+}

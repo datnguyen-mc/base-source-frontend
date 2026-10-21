@@ -61,12 +61,37 @@ const loadTemplate = async (url) => {
   return vite.transformIndexHtml(url, await fs.readFile(path.join(root, 'index.html'), 'utf-8'));
 };
 // dev:ssr — Vite adds CSS from JavaScript, so server-rendered markup would paint unstyled until
-// main.jsx runs. Link every stylesheet the app imported; main.jsx removes them once it starts.
-const devStylesheets = () =>
-  [...vite.environments.ssr.moduleGraph.idToModuleMap.values()]
-    .filter((mod) => mod.url && /\.(css|scss|sass|less|styl)$/.test(mod.file || ''))
-    .map((mod) => `<link rel="stylesheet" href="${mod.url}?direct" data-ssr-dev-css>`)
+// main.jsx runs. Link every stylesheet the app imports instead, with the id Vite's client knows it
+// by (data-vite-dev-id): the client then keeps that link — and hot-updates it — rather than adding
+// the same CSS again as a <style> (applied twice, its fonts loading anew: the text flashes).
+// They go right before the src/loaded.css link that vite-plugins/loading-plugin.js puts after #root
+// — in <body>, so the loading spinner paints meanwhile — and the script between makes the parser
+// wait for them: the page is let go (src/loaded.css) only once it is styled.
+const LOADED_CSS_LINK = '<link rel="stylesheet" href="/src/loaded.css">';
+const isStylesheet = (mod) => Boolean(mod?.url) && /\.(css|scss|sass|less|styl)$/.test(mod.file || '');
+// The browser entry's own imports first (main.jsx: index.css, fonts… — the server never loads it),
+// then those the server render imported.
+const devStylesheets = async (template) => {
+  const mods = [];
+  const entry = template.match(/<script\b[^>]*\btype="module"[^>]*\bsrc="(\/(?!@)[^"]+)"/)?.[1];
+  if (entry) {
+    await vite.environments.client.transformRequest(entry).catch(() => null); // fills in its imports
+    const mod = await vite.environments.client.moduleGraph.getModuleByUrl(entry);
+    mods.push(...[...(mod?.importedModules ?? [])].filter(isStylesheet));
+  }
+  mods.push(...[...vite.environments.ssr.moduleGraph.idToModuleMap.values()].filter(isStylesheet));
+  const seen = new Set();
+  return mods
+    .filter((mod) => !seen.has(mod.url) && seen.add(mod.url))
+    .map((mod) => `<link rel="stylesheet" href="${mod.url}?direct" data-vite-dev-id="${mod.id.replaceAll('"', '&quot;')}">`)
     .join('\n');
+};
+const withDevStylesheets = async (html, template) => {
+  const links = await devStylesheets(template);
+  return html.includes(LOADED_CSS_LINK)
+    ? html.replace(LOADED_CSS_LINK, () => `${links}\n<script>/* after the stylesheets above */</script>\n${LOADED_CSS_LINK}`)
+    : html.replace('</head>', () => `${links}\n</head>`);
+};
 // The SPA page with the site-wide head — what people get when a page cannot be rendered.
 const spaShell = async (template) => {
   const entry = await loadEntry().catch(() => null);
@@ -129,9 +154,13 @@ if (isProduction) {
   }
   app.use(compression());
   // `extensions: []` keeps sirv from answering "/" with index.html — every page goes through SSR.
+  // The build's files come compressed too (vite-plugins/precompress-plugin.js): x.js.br / x.js.gz
+  // are sent as they are, and compression() leaves them be — no CPU or memory spent per request.
   app.use(
     sirv(path.join(root, 'dist/client'), {
       extensions: [],
+      brotli: true,
+      gzip: true,
       setHeaders: (res, pathname) => {
         res.setHeader(
           'Cache-Control',
@@ -173,7 +202,7 @@ const renderPage = async (req) => {
     const page = await entry.render(url, { fallbackUrl: originOf(req) });
     if (page.redirect) return page;
     let html = entry.injectPage(template, page);
-    if (!isProduction && page.html) html = html.replace('</head>', () => `${devStylesheets()}\n</head>`);
+    if (!isProduction && page.html) html = await withDevStylesheets(html, template);
     return { status: page.status, html, mode: page.mode, timings: page.timings };
   } catch (err) {
     vite?.ssrFixStacktrace(err);

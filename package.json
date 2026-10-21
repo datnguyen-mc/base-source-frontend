@@ -15,7 +15,7 @@
     "build:ssr": "VITE_APP_ENV=${VITE_APP_ENV:-production} vite build --outDir dist/client && VITE_APP_ENV=${VITE_APP_ENV:-production} vite build --ssr src/entry-server.js --outDir dist/server",
     "build:ssg": "VITE_APP_ENV=${VITE_APP_ENV:-production} vite build && VITE_APP_ENV=${VITE_APP_ENV:-production} vite build --ssr src/entry-server.js --outDir dist-ssr && node scripts/prerender.js",
     "preview": "vite preview",
-    "start:ssr": "node server.js --prod"
+    "start:ssr": "MALLOC_ARENA_MAX=2 node --max-semi-space-size=1 --optimize-for-size server.js --prod"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

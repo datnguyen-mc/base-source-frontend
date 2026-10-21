@@ -158,9 +158,11 @@ export function babelTransformPlugin() {
 		order: 'pre',
 		// Inject Tailwind CDN for visual editing capabilities
 		transformIndexHtml(html) {
-			// Inject the Tailwind CSS CDN script right before the closing </head> tag
-			const tailwindScript = `    <!-- Tailwind CSS CDN for visual editing -->\n    <script src="https://cdn.tailwindcss.com"></script>\n  `;
-			return html.replace('</head>', tailwindScript + '</head>');
+			// Inject the Tailwind CSS CDN script right before the closing </body> tag: in <head> it holds
+			// the first paint (the loading spinner) until it has downloaded. It still runs before the
+			// app's module scripts, which wait for the whole page to be parsed.
+			const tailwindScript = `    <!-- Tailwind CSS CDN for visual editing -->\n    <script src="https://cdn.tailwindcss.com"></script>\n`;
+			return html.replace('</body>', tailwindScript + '</body>');
 		},
 		transform(code, id) {
 			// Skip node_modules and visual-edit-agent itself
