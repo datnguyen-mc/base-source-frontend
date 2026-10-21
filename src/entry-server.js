@@ -34,15 +34,22 @@ const crawlerView = (page) => {
  * → { status, head, html, mode, timings } — or { status, redirect, mode: 'redirect' }.
  * mode: 'rendered' (the React app), 'client' (noindex page, rendered in the browser) or
  * 'fallback' (the app failed on the server). timings in ms: { meta, data, effects, render }.
+ * A rendered page also has `script`, the data hydration starts from (already in `head`).
  * `fallbackUrl` is used only when neither SITE_URL nor site.url (src/seo.config.js) is set.
+ * `onHead({ status, head })` is called as soon as the page's meta is known, while the app is
+ * still rendering (its data loading) — server.js may send the start of the page then.
  */
-export async function render(url, { fallbackUrl } = {}) {
+export async function render(url, { fallbackUrl, onHead } = {}) {
   const siteUrl = siteUrlOf(fallbackUrl);
   const base = siteUrl || 'http://localhost';
   const started = performance.now();
   const timings = {};
+  const noindexPath = isNoindexPath(url, base);
   const meta = resolvePage(url, base).then((result) => {
     timings.meta = Math.round(performance.now() - started);
+    if (onHead && !noindexPath && !result.page.noindex) {
+      onHead({ status: result.status, head: renderHead(result.page, site, siteUrl, result.path) });
+    }
     return result;
   });
   const clientRendered = async () => {
@@ -50,7 +57,7 @@ export async function render(url, { fallbackUrl } = {}) {
     return { status, head: renderHead(page, site, siteUrl, path), html: '', mode: 'client', timings };
   };
   // Pages for signed-in people (noindex) stay client-rendered, exactly like the SPA.
-  if (isNoindexPath(url, base)) return clientRendered();
+  if (noindexPath) return clientRendered();
   // The page's meta and the app render load their data at the same time, not one after the other.
   const app = import('@/seo/render-app').then(
     // Imported on demand: the Vite plugin loads this module for meta only, never the whole app.
@@ -77,6 +84,7 @@ export async function render(url, { fallbackUrl } = {}) {
     status: result.status === 200 ? status : result.status,
     head: `${head}\n    ${result.script}`,
     html: result.html,
+    script: result.script,
     mode: 'rendered',
     timings: { ...timings, ...result.timings },
   };

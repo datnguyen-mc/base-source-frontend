@@ -7,7 +7,9 @@ import zlib from 'node:zlib';
 // the best level, once. The production server (server.js, sirv) sends those as they are instead of
 // compressing every response again (CPU and memory on each request, at a lower level: bigger
 // files); static hosts that serve precompressed files (nginx gzip_static…) can use them too.
-const TEXT = /\.(js|mjs|css|html|svg|json|xml|txt|map|wasm)$/;
+// Not HTML: build:ssg rewrites index.html after this (scripts/prerender.js), and a host would send
+// the stale index.html.br — the empty SPA page — in its place. HTML is small and SSR renders it.
+const TEXT = /\.(js|mjs|css|svg|json|xml|txt|map|wasm)$/;
 const MIN_BYTES = 1024;
 const brotli = promisify(zlib.brotliCompress);
 const gzip = promisify(zlib.gzip);

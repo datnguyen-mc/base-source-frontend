@@ -70,8 +70,11 @@ First visit, every mode: a spinner shows until the app's stylesheet has arrived,
 page (a stylesheet linked in `<head>` holds the first paint — seconds on a slow connection).
 `vite-plugins/loading-plugin.js` puts `src/loading.css` into `<head>` (the page held back, the
 spinner in its place) and, in the build, links the app's stylesheet right after `#root`, preloaded
-in `<head>`; `src/loaded.css`, bundled into that stylesheet, lets the page go. Other stylesheets
-linked in `index.html`'s `<head>` (e.g. Google Fonts) still hold the first paint.
+in `<head>`; `src/loaded.css`, bundled into that stylesheet, lets the page go. Stylesheets
+`index.html` links from other sites in `<head>` (e.g. Google Fonts) move there too, before the
+app's own — a web font may then swap in after the page shows. SSR: a browser opening a page that
+is not cached yet gets its start (`<head>`, the spinner) at once, while the page's data loads on
+the server, and the rest when rendered (`X-SSR: early`); crawlers always get the page whole.
 
 Published SSR server: `build:ssr` bundles every package the render uses into `dist/server`
 (`ssr.noExternal`) and server.js with express / compression / sirv into `server.prod.mjs`
@@ -81,8 +84,8 @@ native addon, or one reading its own files at run time, may need a fix there (js
 Memory (SSR): `start:prod` / `start:ssr` run Node with `--max-semi-space-size=1 --optimize-for-size`
 and `MALLOC_ARENA_MAX=2` — a smaller V8 young generation and fewer glibc arenas, so a server under
 traffic keeps far less memory (a little more GC). A pod that starts `node server.prod.mjs --prod`
-itself needs the same flags and env. The build also writes `.br` / `.gz` copies of its files, which
-the server sends as they are instead of compressing each response.
+itself needs the same flags and env. The build also writes `.br` / `.gz` copies of its assets (JS,
+CSS…; not HTML), which the server sends as they are instead of compressing each response.
 
 ### Caching (SSR)
 

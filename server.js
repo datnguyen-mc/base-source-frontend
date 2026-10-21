@@ -64,10 +64,10 @@ const loadTemplate = async (url) => {
 // main.jsx runs. Link every stylesheet the app imports instead, with the id Vite's client knows it
 // by (data-vite-dev-id): the client then keeps that link — and hot-updates it — rather than adding
 // the same CSS again as a <style> (applied twice, its fonts loading anew: the text flashes).
-// They go right before the src/loaded.css link that vite-plugins/loading-plugin.js puts after #root
-// — in <body>, so the loading spinner paints meanwhile — and the script between makes the parser
-// wait for them: the page is let go (src/loaded.css) only once it is styled.
-const LOADED_CSS_LINK = '<link rel="stylesheet" href="/src/loaded.css">';
+// They go right before src/loaded.css, which vite-plugins/loading-plugin.js puts after #root in dev
+// (<style data-app-loaded>) — in <body>, so the loading spinner paints meanwhile — and the script
+// between makes the parser wait for them: the page is let go only once it is styled.
+const LOADED_CSS = /<style data-app-loaded>/;
 const isStylesheet = (mod) => Boolean(mod?.url) && /\.(css|scss|sass|less|styl)$/.test(mod.file || '');
 // The browser entry's own imports first (main.jsx: index.css, fonts… — the server never loads it),
 // then those the server render imported.
@@ -88,8 +88,8 @@ const devStylesheets = async (template) => {
 };
 const withDevStylesheets = async (html, template) => {
   const links = await devStylesheets(template);
-  return html.includes(LOADED_CSS_LINK)
-    ? html.replace(LOADED_CSS_LINK, () => `${links}\n<script>/* after the stylesheets above */</script>\n${LOADED_CSS_LINK}`)
+  return LOADED_CSS.test(html)
+    ? html.replace(LOADED_CSS, (tag) => `${links}\n<script>/* after the stylesheets above */</script>\n${tag}`)
     : html.replace('</head>', () => `${links}\n</head>`);
 };
 // The SPA page with the site-wide head — what people get when a page cannot be rendered.
@@ -196,17 +196,23 @@ const remember = (key, page) => {
   pageCache.set(key, { ...page, freshUntil: Date.now() + cacheTtl, staleUntil: Date.now() + cacheTtl + cacheStale });
 };
 
-// One page, start to finish: → { status, html, mode, timings } or { status, redirect }.
-const renderPage = async (req) => {
+// One page, start to finish: → { status, html, mode, timings, root, script } or { status, redirect }.
+// `root` and `script` are the page's content and hydration data apart, for a page sent in two parts
+// (sendEarly). `onStart({ status, html })` gets, once the page's head is known, the page with an
+// empty #root — its start.
+const renderPage = async (req, onStart) => {
   const url = req.originalUrl;
   const template = await loadTemplate(url);
   try {
     const entry = await loadEntry();
-    const page = await entry.render(url, { fallbackUrl: originOf(req) });
+    const page = await entry.render(url, {
+      fallbackUrl: originOf(req),
+      onHead: onStart && (({ status, head }) => onStart({ status, html: entry.injectPage(template, { head }) })),
+    });
     if (page.redirect) return page;
     let html = entry.injectPage(template, page);
     if (!isProduction && page.html) html = await withDevStylesheets(html, template);
-    return { status: page.status, html, mode: page.mode, timings: page.timings };
+    return { status: page.status, html, mode: page.mode, timings: page.timings, root: page.html, script: page.script ?? '' };
   } catch (err) {
     vite?.ssrFixStacktrace(err);
     // The SPA still works without SSR — people get the app either way. When the backend is
@@ -216,11 +222,50 @@ const renderPage = async (req) => {
     return { status: unavailable ? 503 : 200, html: await spaShell(template), mode: unavailable ? 'unavailable' : 'fallback' };
   }
 };
-// Requests for the same page while it renders share that one render.
+// Requests for the same page while it renders share that one render: { page, start } — `start`
+// resolves with the page's start (see renderPage) once its head is known, or null.
 const rendering = new Map();
 const renderOnce = (key, req) => {
-  if (!rendering.has(key)) rendering.set(key, renderPage(req).finally(() => rendering.delete(key)));
+  if (!rendering.has(key)) {
+    let started;
+    const start = new Promise((resolve) => (started = resolve));
+    const page = renderPage(req, started).finally(() => {
+      rendering.delete(key);
+      started(null);
+    });
+    rendering.set(key, { page, start });
+  }
   return rendering.get(key);
+};
+
+// ── A page sent in two parts ─────────────────────────────────────────────────────────────────
+// A browser opening a page that is not cached yet would wait on a white tab while its data loads
+// on the server. Once the page's own head is known (a 200) and the render is still busy 50 ms later,
+// it gets the start of the page at once — <head> (the spinner, the stylesheet / script downloads)
+// down to #root — and the rest of the same page once rendered: the content, then the hydration data
+// (in <head> when sent whole). Crawlers and other clients always get the page whole, with its real
+// status; a page sent in parts is not cached by a CDN (its status was sent before it was known).
+const CRAWLER = /bot|crawl|spider|slurp|facebookexternalhit|embedly|preview|whatsapp|telegram|discord|slack/i;
+const sendsEarly = (req) =>
+  isProduction && req.method === 'GET' && req.get('sec-fetch-dest') === 'document' && !CRAWLER.test(req.get('user-agent') || '');
+const doneWithin = (promise, ms) => Promise.race([promise.then(() => true, () => true), new Promise((r) => setTimeout(r, ms, false))]);
+const ROOT_OPEN = /<div\b[^>]*\sid=["']root["'][^>]*>/i;
+const sendEarly = async (res, start, render) => {
+  const open = start.match(ROOT_OPEN);
+  const cut = open.index + open[0].length;
+  res
+    .status(200)
+    .set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-SSR': 'early', ...(cacheTtl ? { 'X-SSR-Cache': 'MISS' } : {}) });
+  res.write(start.slice(0, cut));
+  res.flush?.(); // through compression()
+  const page = await render;
+  const rest = start.slice(cut); // "</div>…" — #root is empty in the start
+  if (page.redirect) {
+    res.end(`<script>location.replace(${JSON.stringify(page.redirect).replace(/</g, '\\u003c')})</script>${rest}`);
+  } else {
+    res.end((page.root ?? '') + rest.replace('</div>', () => `</div>\n${page.script ?? ''}`));
+  }
+  return page;
 };
 
 // Browsers revalidate every time (ETag → 304); a CDN may keep the page as long as we do.
@@ -251,11 +296,20 @@ app.use(async (req, res, next) => {
     if (hit && hit.staleUntil > Date.now()) {
       const fresh = hit.freshUntil > Date.now();
       // Past its TTL: answered from the cache anyway, refreshed in the background.
-      if (!fresh) renderOnce(key, req).then((page) => remember(key, page), () => {});
+      if (!fresh) renderOnce(key, req).page.then((page) => remember(key, page), () => {});
       sendPage(res, hit, fresh ? 'HIT' : 'STALE');
       return logPage(req, hit.status, `${hit.mode} (cache ${fresh ? 'hit' : 'stale'})`, started);
     }
-    const page = await renderOnce(key, req);
+    const render = renderOnce(key, req);
+    if (sendsEarly(req)) {
+      const start = await Promise.race([render.start, render.page.then(() => null, () => null)]);
+      if (start?.status === 200 && !(await doneWithin(render.page, 50))) {
+        const page = await sendEarly(res, start.html, render.page);
+        if (!page.redirect) remember(key, page);
+        return logPage(req, page.status || 302, `${page.redirect ? `redirect → ${page.redirect}` : page.mode} (sent early)`, started, page.timings);
+      }
+    }
+    const page = await render.page;
     if (page.redirect) {
       logPage(req, page.status || 302, `redirect → ${page.redirect}`, started);
       return res.redirect(page.status || 302, page.redirect);
