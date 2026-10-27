@@ -109,7 +109,7 @@ VITE_APP_ENV=production npm run build:ssr && PORT=5173 npm run start:ssr
 
 | File | Controls |
 |---|---|
-| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `robots.txt`, `sitemap.xml`, `strict` 404s |
+| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `languages` (multi-language, below), `robots.txt`, `sitemap.xml`, `strict` 404s |
 | `src/seo.routes.js` | **Every page, one file**: title, description, image, `type` (og:type), `content`, `items`, `breadcrumbs`, `canonical`, `noindex`, `imageAlt`, `author`, `alternates` (hreflang), extra `meta` / `links`, `jsonLd`, `load()` for data, `paths()` for dynamic URLs — field list in the file header |
 
 Structured data (JSON-LD) comes with it: `WebSite` on the home page (with a search box when
@@ -167,6 +167,89 @@ description, Open Graph, Twitter, canonical…) are replaced, and the new ones a
 `src/seo/` (engine), `src/entry-server.js`, `server.js`, `scripts/prerender.js` and
 `vite-plugins/seo-plugin.js` are shared infrastructure — the same in every app; only
 `src/seo.config.js` and `src/seo.routes.js` belong to the app.
+
+### Multi-language — one URL prefix per language
+
+```js
+// src/seo.config.js
+export default {
+  languages: ['en', 'kr'],                       // URL prefixes; the first is the default
+  site: {
+    name: 'My Shop',
+    description: { en: 'Phones and accessories…', kr: '휴대폰과 액세서리…' },
+    …
+  },
+};
+```
+
+Every page is then served under each prefix (`/en/shop`, `/kr/shop`) with its own SEO, in every
+build mode. The base ships with the line commented out: a single-language site has no prefix, and
+nothing of this section applies (but the last paragraph, on `:lang` routes).
+
+| `/kr/shop` gets | |
+|---|---|
+| `<html lang>` | `ko` |
+| title, description, Open Graph… | the `kr` values |
+| canonical | `/kr/shop`, itself (never the default language's) |
+| hreflang | `en` → `/en/shop`, `ko` → `/kr/shop`, `x-default` → `/en/shop` |
+| `og:locale` | `ko_KR`, the other languages as `og:locale:alternate` |
+| `sitemap.xml` | every page in every language, each with its `xhtml:link` alternates |
+
+**1. Write every path without the language** — in `src/seo.routes.js` (`path`, `breadcrumbs`,
+`items`, `canonical`, `paths()`) and in the app (`<Link to="/shop">`, `navigate('/cart')`,
+`useLocation().pathname === '/shop'`). The router runs under the URL's prefix (its `basename`) and
+the engine puts the page's language in. `<a href="/shop">` or `window.location = '/shop'` would
+lose it: use `<Link>` / `navigate()`.
+
+**2. Text per language: `{ en: '…', kr: '…' }`** anywhere in `site` or a route — a title, a
+breadcrumb's name, a field of `jsonLd`. A language left out gets the default language's.
+
+**3. Data per language: `lang`.** `load()` gets the page's prefix, and `paths()` is called once
+per language with it:
+
+```js
+{
+  path: '/products/:slug',
+  load: async ({ params, lang, entities }) => {
+    const p = await entities.Product.findOne({ slug: params.slug });
+    return p && { title: p[`name_${lang}`] || p.name, breadcrumbs: [{ name: { en: 'Shop', kr: '쇼핑' }, url: '/shop' }] };
+  },
+  paths: async ({ entities }) => (await entities.Product.list({ limit: 1000 })).map((p) => `/products/${p.slug}`),
+}
+```
+
+**4. In pages: `useLanguage()`** (inside the router: pages, the Layout and what they render).
+
+```jsx
+import { useLanguage } from '@/seo/ssr';
+const { lang, languages, hrefIn } = useLanguage();       // lang: 'kr'
+const t = TEXT[lang];                                    // TEXT = { en: {…}, kr: {…} }
+// Language switcher: a plain <a>, so the page loads again, server-rendered in that language.
+{languages.map((l) => <a key={l.code} href={hrefIn(l.code)} hrefLang={l.hreflang}>{l.label}</a>)}
+```
+
+**5. Prefixes are URL segments, not language tags.** `kr`, `jp`, `cn`, `tw`, `vn`… are countries
+(`hreflang="kr"` would be Kanuri), so they become `ko`, `ja`, `zh-CN`, `zh-TW`, `vi`. Say it
+yourself where that is not enough: `languages: { en: {}, kr: { hreflang: 'ko-KR', label: '한국어' } }`.
+`site.lang` is not used then.
+
+**6. The API is asked in the page's language.** The SDK sends `Accept-Language` from the URL
+(`/kr/…` → `ko`) — on the server too, each page in its own, and `src/seo/entities.js` caches per
+language. A page without a language (`/admin`) keeps the browser's. A login redirect stays in the
+language: `/kr/cart` → `/kr/login?next=%2Fcart` (`next` without the prefix, for `navigate(next)`).
+
+A URL without a language (`/`, `/shop?x=1`) answers **302** to the default language's (`/en`,
+`/en/shop?x=1`); the SPA build moves it in the browser. Files (`/ads.txt`) are left alone, and
+`/admin` keeps one URL for every language (a `<Link to="/admin">` from a page goes to `/kr/admin`,
+which works the same and is `noindex`). `sitemap.exclude` takes paths without the language. With
+`build:ssg`, `/` is the SPA page and moves to `/en` in the browser — give crawlers a host redirect
+`/` → `/en`.
+
+**Without `languages`: the page's own `lang`.** An app whose routes carry the language
+(`/:lang/products/:id`, any language, no list) gets `<html lang>` and `og:locale` per page all the
+same: from a route's `:lang` param (`/kr/…` → `ko`), or from `lang` in its meta / `load()` (`'en-US'`),
+which wins. Pages without either keep `site.lang`. Canonical is the page itself; hreflang comes
+from the route's `alternates`.
 
 ---
 

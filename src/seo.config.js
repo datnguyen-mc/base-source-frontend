@@ -6,11 +6,18 @@
 //     robots rules are edited there (served as it is).
 // ─────────────────────────────────────────────────────────────────────────────────────────
 export default {
+  // Multi-language with a fixed list: one URL prefix per language (/en/…, /kr/…), each with its
+  // own SEO — README "Multi-language". The first is the default: '/' and paths without a prefix
+  // redirect to it. Any text can be given per language, e.g. description: { en: '…', kr: '…' }.
+  // Leave it out for a single-language site, or for routes that carry the language themselves
+  // ('/:lang/products/:id' — any language, see `lang` in src/seo.routes.js).
+  // languages: ['en', 'kr'],
+
   site: {
     name: 'VibeX APP',
     // Public origin, e.g. 'https://myapp.com'. The SITE_URL env var overrides it.
     url: '',
-    lang: 'en', // 'vi-VN' style also sets og:locale
+    lang: 'en', // 'vi-VN' style (or ko, ja, vi, th, id) also sets og:locale; a page's own `lang` wins; with `languages`, unused
     description: 'VibeX APP',
     keywords: '',
     image: '', // default social share image (1200×630)

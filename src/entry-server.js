@@ -1,9 +1,11 @@
 // First: the SDK keeps a reference to fetch when it is created (src/seo/fetch-hook.js).
 import '@/seo/fetch-hook';
+import { AsyncLocalStorage } from 'node:async_hooks';
 // Before any of the app's modules, which may call DOMPurify as they load (src/seo/server-dom.js).
 import '@/seo/server-dom';
-import { config, isNoindexPath, listPaths, resolvePage, site, siteUrlOf, staticPaths } from '@/seo/engine';
+import { config, isNoindexPath, listPaths, resolvePage, site, siteUrlOf, sitemapAlternates, sitemapConfig, staticPaths } from '@/seo/engine';
 import { injectPage, renderBody, renderHead, renderRobots as robotsTxt, renderSitemap as sitemapXml } from '@/seo/head';
+import { asLanguage, defaultLanguage, languageRedirect, SERVER_LANGUAGE, siteIn, splitLanguage } from '@/seo/i18n';
 // SSR entry: loaded by server.js (SSR), scripts/prerender.js (SSG) and vite-plugins/seo-plugin.js
 // (index.html, SPA robots/sitemap). Meta comes from src/seo.config.js and src/seo.routes.js; the
 // page body is the real React app (src/seo/render-app.jsx), hydrated in the browser.
@@ -26,12 +28,16 @@ const reportOnce = (message, err) => {
   reported.add(key);
   console.error(`${message} — ${err?.message}${culprit(err) ? ` (at ${culprit(err)})` : ''}`);
 };
-const crawlerView = (page) => {
-  const body = renderBody(page, site);
+// The language of each page being rendered, for pageLanguage() (src/seo/i18n.js): the SDK asks
+// the API in it — the data of /kr comes in Korean, whatever else renders at the same time.
+globalThis[SERVER_LANGUAGE] ??= new AsyncLocalStorage();
+const crawlerView = (page, pageSite) => {
+  const body = renderBody(page, pageSite);
   return body ? `${SSR_VIEW}<div class="vx-ssr">${body}</div>` : '';
 };
 /**
- * → { status, head, html, mode, timings } — or { status, redirect, mode: 'redirect' }.
+ * → { status, head, html, lang, mode, timings } — or { status, redirect, mode: 'redirect' }.
+ * lang: the page's language, for <html lang> (injectPage).
  * mode: 'rendered' (the React app), 'client' (noindex page, rendered in the browser) or
  * 'fallback' (the app failed on the server). timings in ms: { meta, data, effects, render }.
  * A rendered page also has `script`, the data hydration starts from (already in `head`).
@@ -39,22 +45,28 @@ const crawlerView = (page) => {
  * `onHead({ status, head })` is called as soon as the page's meta is known, while the app is
  * still rendering (its data loading) — server.js may send the start of the page then.
  */
-export async function render(url, { fallbackUrl, onHead } = {}) {
+export const render = (url, options) =>
+  asLanguage(splitLanguage(new URL(url, 'http://localhost').pathname).lang, () => renderPage(url, options));
+async function renderPage(url, { fallbackUrl, onHead } = {}) {
   const siteUrl = siteUrlOf(fallbackUrl);
   const base = siteUrl || 'http://localhost';
+  // A page asked for without its language (src/seo.config.js `languages`): /shop → /en/shop.
+  const { pathname, search } = new URL(url, base);
+  const moved = languageRedirect(pathname, search);
+  if (moved) return { status: 302, redirect: moved, mode: 'redirect' };
   const started = performance.now();
   const timings = {};
   const noindexPath = isNoindexPath(url, base);
   const meta = resolvePage(url, base).then((result) => {
     timings.meta = Math.round(performance.now() - started);
     if (onHead && !noindexPath && !result.page.noindex) {
-      onHead({ status: result.status, head: renderHead(result.page, site, siteUrl, result.path) });
+      onHead({ status: result.status, head: renderHead(result.page, result.site, siteUrl, result.path), lang: result.site.lang });
     }
     return result;
   });
   const clientRendered = async () => {
-    const { status, path, page } = await meta;
-    return { status, head: renderHead(page, site, siteUrl, path), html: '', mode: 'client', timings };
+    const { status, path, page, site: pageSite } = await meta;
+    return { status, head: renderHead(page, pageSite, siteUrl, path), html: '', lang: pageSite.lang, mode: 'client', timings };
   };
   // Pages for signed-in people (noindex) stay client-rendered, exactly like the SPA.
   if (noindexPath) return clientRendered();
@@ -64,20 +76,21 @@ export async function render(url, { fallbackUrl, onHead } = {}) {
     ({ renderApp }) => renderApp(new URL(url, base).href).then((result) => ({ result }), (renderError) => ({ renderError })),
     (importError) => ({ importError }),
   );
-  const [{ status, path, page }, { result, renderError, importError }] = await Promise.all([meta, app]);
-  const head = renderHead(page, site, siteUrl, path);
+  const [{ status, path, page, site: pageSite }, { result, renderError, importError }] = await Promise.all([meta, app]);
+  const head = renderHead(page, pageSite, siteUrl, path);
+  const lang = pageSite.lang;
   // A page the meta marks noindex only once its data is known (e.g. a private post).
   if (page.noindex && status === 200) return clientRendered();
   if (importError) {
     // A module touching window/document at import time: every page is sent client-rendered
     // (the app itself still works in the browser) until that module is fixed.
     reportOnce('[ssr] the app cannot be loaded on the server, so pages are client-rendered', importError);
-    return { status, head, html: crawlerView(page), mode: 'fallback', timings };
+    return { status, head, html: crawlerView(page, pageSite), lang, mode: 'fallback', timings };
   }
   if (renderError) {
     if (renderError?.name === 'SeoDataUnavailableError') throw renderError;
     reportOnce(`[ssr] ${path} cannot be rendered on the server, so it is client-rendered`, renderError);
-    return { status, head, html: crawlerView(page), mode: 'fallback', timings };
+    return { status, head, html: crawlerView(page, pageSite), lang, mode: 'fallback', timings };
   }
   if (result.redirect) return { status: result.status, redirect: result.redirect, mode: 'redirect' };
   return {
@@ -85,6 +98,7 @@ export async function render(url, { fallbackUrl, onHead } = {}) {
     head: `${head}\n    ${result.script}`,
     html: result.html,
     script: result.script,
+    lang,
     mode: 'rendered',
     timings: { ...timings, ...result.timings },
   };
@@ -92,11 +106,18 @@ export async function render(url, { fallbackUrl, onHead } = {}) {
 
 export { injectPage, listPaths, siteUrlOf };
 export const renderRobots = ({ fallbackUrl } = {}) => robotsTxt(config, siteUrlOf(fallbackUrl));
-// `paths` defaults to every indexable URL; build:ssg passes the pages it actually wrote.
-export const renderSitemap = async ({ fallbackUrl, paths } = {}) =>
-  sitemapXml(config, paths || (await listPaths()), siteUrlOf(fallbackUrl));
+// `paths` defaults to every indexable URL; build:ssg passes the pages it actually wrote. On a
+// multi-language site each URL lists its other languages (hreflang).
+export const renderSitemap = async ({ fallbackUrl, paths } = {}) => {
+  const list = paths || (await listPaths());
+  return sitemapXml(sitemapConfig, list, siteUrlOf(fallbackUrl), sitemapAlternates(list));
+};
 // Static routes only: the SPA build and `vite` dev have no data to list the dynamic ones.
-export const renderStaticSitemap = ({ fallbackUrl } = {}) => sitemapXml(config, staticPaths(), siteUrlOf(fallbackUrl));
-// index.html in the SPA build: served for every route, so site-wide tags only (no canonical).
-export const renderIndexHead = () => renderHead({}, site, siteUrlOf(''), undefined);
-export const siteLang = () => site.lang || 'en';
+export const renderStaticSitemap = ({ fallbackUrl } = {}) => {
+  const list = staticPaths();
+  return sitemapXml(sitemapConfig, list, siteUrlOf(fallbackUrl), sitemapAlternates(list));
+};
+// index.html in the SPA build: served for every route, so site-wide tags only (no canonical) —
+// in the default language on a multi-language site.
+export const renderIndexHead = () => renderHead({}, siteIn(site, defaultLanguage), siteUrlOf(''), undefined);
+export const siteLang = () => siteIn(site, defaultLanguage).lang || 'en';

@@ -58,7 +58,9 @@ export async function syncDocumentHead(href, { initial = false } = {}) {
   const path = normalizePath(url.pathname);
   const base = siteUrl();
   if (initial && document.querySelector('title')?.getAttribute('data-seo-path') === path) return;
-  const { page } = await resolvePage(url.href).catch(() => ({ page: {} }));
+  const { page, site: pageSite } = await resolvePage(url.href).catch(() => ({ page: {}, site }));
   if (ticket !== latest) return;
-  applyHead(renderHead(page, site, base, path));
+  applyHead(renderHead(page, pageSite, base, path));
+  // The page's language (its `lang` / `:lang`, or src/seo.config.js `languages`): index.html has the default one.
+  if (pageSite.lang) document.documentElement.lang = pageSite.lang;
 }
