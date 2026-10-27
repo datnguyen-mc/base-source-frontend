@@ -108,13 +108,61 @@ export const siteIn = (site, lang) => {
   return { ...out, lang: language.hreflang, home: `/${lang}`, searchUrl: localize(out.searchUrl, lang) };
 };
 
+// ── Languages in the app's routes: src/seo.config.js `site.langs` ──────────────────────────────
+// An app whose pages carry the language themselves (src/pages.config.js ':lang/products/:id')
+// lists them in `site.langs`; the default is `site.lang` if it is one of them, else the first.
+// The routes stay the app's: nothing here changes the router.
+const siteLangs = [].concat(config.site?.langs || []);
+export const routeLanguages = siteLangs.filter((code) => {
+  if (typeof code === 'string' && CODE.test(code)) return true;
+  console.warn(`[seo] src/seo.config.js: site.langs '${code}' is not a URL segment like 'ko' or 'en' — skipped`);
+  return false;
+});
+if (routeLanguages.length && languages.length) {
+  console.warn('[seo] src/seo.config.js: `languages` and `site.langs` are two ways to do one thing — keep one');
+}
+export const routeDefault = routeLanguages.includes(config.site?.lang) ? config.site.lang : routeLanguages[0];
+/** '/ko/products' → 'ko': the language a path starts with, one of `site.langs` — or undefined. */
+export const routeLanguageOf = (pathname) => {
+  const code = pathname.split('/')[1];
+  return routeLanguages.includes(code) ? code : undefined;
+};
+
 /**
- * A page's own language, whatever languages the app has (no `languages` list needed): `lang` in
- * its meta ('en-US'), else its route's `:lang` ('/:lang/products/:id' — /kr/products/3 is 'ko').
- * Undefined when it has neither: the site's applies.
+ * Where a URL without a language goes on an app with `site.langs`, before it is rendered:
+ * undefined — render it as it is; a path — 301 there; null — no such page (404).
+ *   /products/3   → /ko/products/3   an old URL of an app that became multi-language
+ *   /             → /ko
+ *   /xx/products  → 404             'xx' is no language of the site, /ko/xx/products no page
+ *   /login, /admin/… as they are     pages without a language
+ * `patternOf(path)` → { pattern, params } of the route the app renders for a path
+ * ('/:lang/products/:id'), null for none (its 404 route) — src/seo/render-app.jsx.
  */
-export const ownLanguage = (page, params) => {
-  const lang = typeof page?.lang === 'string' && page.lang ? page.lang : CODE.test(params?.lang || '') ? params.lang : '';
+export const routeLanguageTarget = (pathname, patternOf) => {
+  if (!routeDefault || routeLanguageOf(pathname)) return undefined;
+  // A file (/favicon.ico, /ads.txt) is not a page in any language.
+  if (/\.[a-z0-9]+$/i.test(pathname)) return undefined;
+  // A `:lang` that is no language of the site is not a page: /products matching ':lang'.
+  const pageOf = (path) => {
+    const match = patternOf(path);
+    return match && (!('lang' in match.params) || routeLanguages.includes(match.params.lang)) ? match.pattern : null;
+  };
+  const own = pageOf(pathname);
+  const target = `/${routeDefault}${pathname === '/' ? '' : pathname}`;
+  const there = pageOf(target);
+  // Moved: no page by itself, or the same page as its `:lang` one ('/' and '/:lang', an old route kept).
+  if (there && (!own || there === `/:lang${own === '/' ? '' : own}`)) return target;
+  return own ? undefined : null;
+};
+
+/**
+ * A page's own language, whatever languages the app has: `lang` in its meta ('en-US'), else the
+ * URL's — its first segment with `site.langs`, its route's `:lang` without ('/:lang/products/:id'
+ * — /kr/products/3 is 'ko'). Undefined when it has none: the site's applies.
+ */
+export const ownLanguage = (page, params, pathname = '') => {
+  const fromUrl = routeLanguages.length ? routeLanguageOf(pathname) : CODE.test(params?.lang || '') ? params.lang : '';
+  const lang = (typeof page?.lang === 'string' && page.lang) || fromUrl;
   return lang ? languageTag(lang) : undefined;
 };
 

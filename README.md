@@ -184,7 +184,7 @@ export default {
 
 Every page is then served under each prefix (`/en/shop`, `/kr/shop`) with its own SEO, in every
 build mode. The base ships with the line commented out: a single-language site has no prefix, and
-nothing of this section applies (but the last paragraph, on `:lang` routes).
+nothing of this section applies (the next one, `site.langs`, is the other way).
 
 | `/kr/shop` gets | |
 |---|---|
@@ -245,11 +245,31 @@ which works the same and is `noindex`). `sitemap.exclude` takes paths without th
 `build:ssg`, `/` is the SPA page and moves to `/en` in the browser — give crawlers a host redirect
 `/` → `/en`.
 
-**Without `languages`: the page's own `lang`.** An app whose routes carry the language
-(`/:lang/products/:id`, any language, no list) gets `<html lang>` and `og:locale` per page all the
-same: from a route's `:lang` param (`/kr/…` → `ko`), or from `lang` in its meta / `load()` (`'en-US'`),
-which wins. Pages without either keep `site.lang`. Canonical is the page itself; hreflang comes
-from the route's `alternates`.
+### Multi-language — the language in the app's own routes (`site.langs`)
+
+The other way: the pages carry the language themselves (`':lang/products/:id'` in
+`src/pages.config.js`) and `src/seo.config.js` lists the languages — `languages` stays out.
+
+```js
+site: { lang: 'ko', langs: ['ko', 'en'], … }      // lang: the default
+```
+
+| Request | SSR answers |
+|---|---|
+| `/en/products/3` | the page, `<html lang="en">`, `og:locale` of `en` (none for a bare `en`; `en-US` → `en_US`) |
+| `/` | **301** → `/ko` |
+| `/products/3`, `/products` (old URLs, before the app had languages) | **301** → `/ko/products/3`, `/ko/products` |
+| `/xx/products` (no language of the site) | **404**, `noindex` |
+| `/login`, `/register`, `/admin/…` (pages without a language) | the page, `site.lang` |
+
+Where a URL goes is decided on the app's routes (`src/App.jsx`): a URL without a language moves
+when it is no page by itself and `/ko` + it is one — or the same page as its `:lang` one (`/`
+and `:lang`). `lang` in a route's meta wins over the URL's. Canonical is the page itself;
+hreflang comes from the route's `alternates`. With `build:ssg`, `/` is the SPA page — give
+crawlers a host redirect `/` → `/ko`.
+
+Without any list, a route's `:lang` param alone still gives its page `<html lang>` and
+`og:locale` (`/kr/…` → `ko`), for any language — nothing is redirected then.
 
 ---
 

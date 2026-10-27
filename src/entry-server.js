@@ -3,9 +3,32 @@ import '@/seo/fetch-hook';
 import { AsyncLocalStorage } from 'node:async_hooks';
 // Before any of the app's modules, which may call DOMPurify as they load (src/seo/server-dom.js).
 import '@/seo/server-dom';
-import { config, isNoindexPath, listPaths, resolvePage, site, siteUrlOf, sitemapAlternates, sitemapConfig, staticPaths } from '@/seo/engine';
-import { injectPage, renderBody, renderHead, renderRobots as robotsTxt, renderSitemap as sitemapXml } from '@/seo/head';
-import { asLanguage, defaultLanguage, languageRedirect, SERVER_LANGUAGE, siteIn, splitLanguage } from '@/seo/i18n';
+import {
+  config,
+  isNoindexPath,
+  listPaths,
+  normalizePath,
+  notFoundPage,
+  resolvePage,
+  seoPattern,
+  site,
+  siteUrlOf,
+  sitemapAlternates,
+  sitemapConfig,
+  staticPaths,
+} from '@/seo/engine';
+import { injectPage, renderBody, renderHead, renderRobots as robotsTxt, renderSitemap as sitemapXml, withLang } from '@/seo/head';
+import {
+  asLanguage,
+  defaultLanguage,
+  languageRedirect,
+  routeLanguageOf,
+  routeLanguages,
+  routeLanguageTarget,
+  SERVER_LANGUAGE,
+  siteIn,
+  splitLanguage,
+} from '@/seo/i18n';
 // SSR entry: loaded by server.js (SSR), scripts/prerender.js (SSG) and vite-plugins/seo-plugin.js
 // (index.html, SPA robots/sitemap). Meta comes from src/seo.config.js and src/seo.routes.js; the
 // page body is the real React app (src/seo/render-app.jsx), hydrated in the browser.
@@ -54,6 +77,18 @@ async function renderPage(url, { fallbackUrl, onHead } = {}) {
   const { pathname, search } = new URL(url, base);
   const moved = languageRedirect(pathname, search);
   if (moved) return { status: 302, redirect: moved, mode: 'redirect' };
+  // An app whose routes carry the language (`site.langs`): a URL without one moves to the default
+  // language's for good — 301, so an old URL keeps its ranking — or, with a first segment that is
+  // no language of the site (/xx/products), is no page. Decided on the app's own routes.
+  if (routeLanguages.length && !routeLanguageOf(pathname)) {
+    const patternOf = await import('@/seo/render-app').then(({ pagePattern }) => pagePattern, () => seoPattern);
+    const target = routeLanguageTarget(normalizePath(pathname), patternOf);
+    if (target) return { status: 301, redirect: target + search, mode: 'redirect' };
+    if (target === null) {
+      const head = renderHead(notFoundPage, site, siteUrl, normalizePath(pathname));
+      return { status: 404, head, html: '', lang: site.lang, mode: 'client', timings: {} };
+    }
+  }
   const started = performance.now();
   const timings = {};
   const noindexPath = isNoindexPath(url, base);
@@ -104,7 +139,7 @@ async function renderPage(url, { fallbackUrl, onHead } = {}) {
   };
 }
 
-export { injectPage, listPaths, siteUrlOf };
+export { injectPage, listPaths, siteUrlOf, withLang };
 export const renderRobots = ({ fallbackUrl } = {}) => robotsTxt(config, siteUrlOf(fallbackUrl));
 // `paths` defaults to every indexable URL; build:ssg passes the pages it actually wrote. On a
 // multi-language site each URL lists its other languages (hreflang).

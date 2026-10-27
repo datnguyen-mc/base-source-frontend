@@ -16,8 +16,8 @@
 //   imageAlt (og:image:alt / twitter:image:alt), author (meta author; article:author too),
 //   alternates { vi: '/vi/about', 'x-default': '/about' }  (hreflang links; automatic with `languages`),
 //   lang ('ko' | 'en-US' …)  the page's language → <html lang>, og:locale (default: site.lang).
-//                A route with a `:lang` param ('/:lang/products/:id') gets it from the URL by
-//                itself — any language, no list to declare ('kr' → 'ko', 'jp' → 'ja'),
+//                Comes from the URL by itself: its first segment when it is one of `site.langs`
+//                (src/seo.config.js), else a `:lang` param ('/:lang/products/:id'; 'kr' → 'ko'),
 //   meta [{ property: 'product:price:amount', content: '799.00' }, …]  any extra <meta>,
 //   links [{ rel: 'next', href: '/blog?page=2' }, …]  any extra <link>,
 //   jsonLd { '@type': 'Product', name, offers: {…} } or an array  (schema.org; @context added),

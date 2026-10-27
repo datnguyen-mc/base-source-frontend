@@ -177,8 +177,8 @@ const pageSpecific = (key) =>
   key.startsWith('property:article:');
 /** Key of one head tag's HTML ('title', 'name:description', 'property:og:image', 'rel:canonical'…), or null. */
 export const headTagKey = keyOf;
-// <html lang="…"> — added, or the one index.html has replaced.
-const withLang = (template, lang) =>
+/** <html lang="…"> — added, or the one index.html has replaced (SSR, and the build's index.html). */
+export const withLang = (template, lang) =>
   lang
     ? template.replace(/<html\b[^>]*>/i, (open) =>
         /\slang\s*=\s*["'][^"']*["']/i.test(open)

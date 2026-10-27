@@ -69,18 +69,32 @@ export async function resolvePage(href, base = DEFAULT_BASE) {
   const { lang: urlLang, path: routePath } = splitLanguage(path);
   const lang = urlLang || defaultLanguage;
   const pageSite = siteIn(site, lang);
+  // The page's own language (its `lang`, or the URL's) wins: <html lang>, og:locale.
+  const siteFor = (page, params) => {
+    const own = ownLanguage(page, params, path);
+    return own ? { ...pageSite, lang: own } : pageSite;
+  };
   const match = matchRoute(routePath);
   if (!match) {
-    return config.strict ? { status: 404, path, page: NOT_FOUND, site: pageSite } : { status: 200, path, page: {}, site: pageSite };
+    const noRoute = siteFor(null, {});
+    return config.strict ? { status: 404, path, page: NOT_FOUND, site: noRoute } : { status: 200, path, page: {}, site: noRoute };
   }
   const page = await runRoute(match.route, { params: match.params, url, entities, site: pageSite, lang });
-  // The page's own language (its `lang`, or its route's `:lang`) wins: <html lang>, og:locale.
-  const own = ownLanguage(page, match.params);
-  const ownSite = own ? { ...pageSite, lang: own } : pageSite;
+  const ownSite = siteFor(page, match.params);
   return page
     ? { status: 200, path, page: pageIn(page, lang, urlLang, routePath), site: ownSite }
     : { status: 404, path, page: NOT_FOUND, site: ownSite };
 }
+/**
+ * { pattern, params } of the route of src/seo.routes.js a path matches, or null — what decides
+ * where a URL goes (src/seo/i18n.js routeLanguageTarget) when the app itself cannot be loaded.
+ */
+export const seoPattern = (pathname) => {
+  const match = matchRoute(normalizePath(pathname));
+  return match ? { pattern: match.route.path, params: match.params } : null;
+};
+/** The meta of a page that does not exist. */
+export const notFoundPage = NOT_FOUND;
 /** True when the URL matches a route declared `noindex: true` — decided without loading data. */
 export const isNoindexPath = (href, base = DEFAULT_BASE) =>
   Boolean(matchRoute(splitLanguage(normalizePath(new URL(href, base).pathname)).path)?.route.noindex);

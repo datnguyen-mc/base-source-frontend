@@ -170,7 +170,8 @@ export function seoPlugin() {
     },
     async transformIndexHtml(html, ctx) {
       const entry = await loadEntry();
-      html = html.replace(/<html([^>]*)\slang="[^"]*"/, (_match, attrs) => `<html${attrs} lang="${entry.siteLang()}"`);
+      // The same rewrite as each SSR page's (src/seo/head.js), so the two never differ.
+      html = entry.withLang(html, entry.siteLang());
       if (ctx.server?.config.server.middlewareMode) return html;
       return entry.injectPage(html, { head: entry.renderIndexHead() });
     },
