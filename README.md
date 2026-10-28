@@ -109,7 +109,7 @@ VITE_APP_ENV=production npm run build:ssr && PORT=5173 npm run start:ssr
 
 | File | Controls |
 |---|---|
-| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `robots.txt`, `sitemap.xml`, `strict` 404s |
+| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `languages` (multi-language, below), `robots.txt`, `sitemap.xml`, `strict` 404s |
 | `src/seo.routes.js` | **Every page, one file**: title, description, image, `type` (og:type), `content`, `items`, `breadcrumbs`, `canonical`, `noindex`, `imageAlt`, `author`, `alternates` (hreflang), extra `meta` / `links`, `jsonLd`, `load()` for data, `paths()` for dynamic URLs — field list in the file header |
 
 Structured data (JSON-LD) comes with it: `WebSite` on the home page (with a search box when
@@ -135,7 +135,8 @@ export default [
 
 `entities.X.get(id)` / `.list({ filter, sort, limit })` / `.findOne(filter)` are the app's own
 entities, returning plain rows — `null` / `[]` when there is no data; return `null` from `load`
-for a 404. When the backend itself is down, SSR answers **503** with the SPA shell (crawlers
+for a 404. A URL no route of the app matches (its `*` page) is a **404** + `noindex` too, and a
+missing file (`/favicon.ico`, an old `/assets/` chunk) a plain 404, never the app's HTML. When the backend itself is down, SSR answers **503** with the SPA shell (crawlers
 retry instead of dropping the page) and `build:ssg` fails. The same files also keep the head
 right in the browser — no per-page code needed: on every navigation `src/seo/client.js` renders
 the page's head with the same `renderHead()` the server uses. Every tag it writes carries
@@ -167,6 +168,111 @@ description, Open Graph, Twitter, canonical…) are replaced, and the new ones a
 `src/seo/` (engine), `src/entry-server.js`, `server.js`, `scripts/prerender.js` and
 `vite-plugins/seo-plugin.js` are shared infrastructure — the same in every app; only
 `src/seo.config.js` and `src/seo.routes.js` belong to the app.
+
+### Multi-language — one URL prefix per language
+
+```js
+// src/seo.config.js
+export default {
+  languages: ['en', 'kr'],                       // URL prefixes; the first is the default
+  site: {
+    name: 'My Shop',
+    description: { en: 'Phones and accessories…', kr: '휴대폰과 액세서리…' },
+    …
+  },
+};
+```
+
+Every page is then served under each prefix (`/en/shop`, `/kr/shop`) with its own SEO, in every
+build mode. The base ships with the line commented out: a single-language site has no prefix, and
+nothing of this section applies (the next one, `site.langs`, is the other way).
+
+| `/kr/shop` gets | |
+|---|---|
+| `<html lang>` | `ko` |
+| title, description, Open Graph… | the `kr` values |
+| canonical | `/kr/shop`, itself (never the default language's) |
+| hreflang | `en` → `/en/shop`, `ko` → `/kr/shop`, `x-default` → `/en/shop` |
+| `og:locale` | `ko_KR`, the other languages as `og:locale:alternate` |
+| `sitemap.xml` | every page in every language, each with its `xhtml:link` alternates |
+
+**1. Write every path without the language** — in `src/seo.routes.js` (`path`, `breadcrumbs`,
+`items`, `canonical`, `paths()`) and in the app (`<Link to="/shop">`, `navigate('/cart')`,
+`useLocation().pathname === '/shop'`). The router runs under the URL's prefix (its `basename`) and
+the engine puts the page's language in. `<a href="/shop">` or `window.location = '/shop'` would
+lose it: use `<Link>` / `navigate()`.
+
+**2. Text per language: `{ en: '…', kr: '…' }`** anywhere in `site` or a route — a title, a
+breadcrumb's name, a field of `jsonLd`. A language left out gets the default language's.
+
+**3. Data per language: `lang`.** `load()` gets the page's prefix, and `paths()` is called once
+per language with it:
+
+```js
+{
+  path: '/products/:slug',
+  load: async ({ params, lang, entities }) => {
+    const p = await entities.Product.findOne({ slug: params.slug });
+    return p && { title: p[`name_${lang}`] || p.name, breadcrumbs: [{ name: { en: 'Shop', kr: '쇼핑' }, url: '/shop' }] };
+  },
+  paths: async ({ entities }) => (await entities.Product.list({ limit: 1000 })).map((p) => `/products/${p.slug}`),
+}
+```
+
+**4. In pages: `useLanguage()`** (inside the router: pages, the Layout and what they render).
+
+```jsx
+import { useLanguage } from '@/seo/ssr';
+const { lang, languages, hrefIn } = useLanguage();       // lang: 'kr'
+const t = TEXT[lang];                                    // TEXT = { en: {…}, kr: {…} }
+// Language switcher: a plain <a>, so the page loads again, server-rendered in that language.
+{languages.map((l) => <a key={l.code} href={hrefIn(l.code)} hrefLang={l.hreflang}>{l.label}</a>)}
+```
+
+**5. Prefixes are URL segments, not language tags.** `kr`, `jp`, `cn`, `tw`, `vn`… are countries
+(`hreflang="kr"` would be Kanuri), so they become `ko`, `ja`, `zh-CN`, `zh-TW`, `vi`. Say it
+yourself where that is not enough: `languages: { en: {}, kr: { hreflang: 'ko-KR', label: '한국어' } }`.
+`site.lang` is not used then.
+
+**6. The SDK knows nothing of languages** (`src/sdk` and `src/api` stay as in apps without SSR):
+the API gets the browser's `Accept-Language`, not the URL's, and none from the server, while
+`src/seo/entities.js` still caches per language. Its login redirect from `/kr/cart` goes to
+`/login?next=%2Fkr%2Fcart`, which moves to the default language (`/en/login`), and `next` keeps
+its prefix — so a login page leaves with `window.location.assign(next)`, not `navigate(next)`
+(which would put it under the current one: `/en/kr/cart`).
+
+A URL without a language (`/`, `/shop?x=1`) answers **302** to the default language's (`/en`,
+`/en/shop?x=1`); the SPA build moves it in the browser. Files (`/ads.txt`) are left alone, and
+`/admin` keeps one URL for every language (a `<Link to="/admin">` from a page goes to `/kr/admin`,
+which works the same and is `noindex`). `sitemap.exclude` takes paths without the language. With
+`build:ssg`, `/` is the SPA page and moves to `/en` in the browser — give crawlers a host redirect
+`/` → `/en`.
+
+### Multi-language — the language in the app's own routes (`site.langs`)
+
+The other way: the pages carry the language themselves (`':lang/products/:id'` in
+`src/pages.config.js`) and `src/seo.config.js` lists the languages — `languages` stays out.
+
+```js
+site: { lang: 'ko', langs: ['ko', 'en'], … }      // lang: the default
+```
+
+| Request | SSR answers |
+|---|---|
+| `/en/products/3` | the page, `<html lang="en">`, `og:locale` of `en` (none for a bare `en`; `en-US` → `en_US`) |
+| `/` | **301** → `/ko` |
+| `/products/3`, `/products` (old URLs, before the app had languages) | **301** → `/ko/products/3`, `/ko/products` |
+| `/xx/products` (no language of the site) | **404**, `noindex` |
+| `/login`, `/register`, `/admin/…` (pages without a language) | the page, `site.lang` |
+
+Where a URL goes is decided on the app's routes (`src/App.jsx`): a URL without a language moves
+when it is no page by itself and `/ko` + it is one — or the same page as its `:lang` one (`/`
+and `:lang`). `lang` in a route's meta wins over the URL's. Canonical is the page itself;
+hreflang comes from the route's `alternates`. With `build:ssg`, `/` is the SPA page — give
+crawlers a host redirect `/` → `/ko`.
+
+Without any list, a route's `:lang` param alone still gives its page `<html lang>` and
+`og:locale` (`/kr/…` → `ko`), for any language — nothing is redirected then.
 
 ---
 

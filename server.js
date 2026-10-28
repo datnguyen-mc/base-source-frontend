@@ -207,7 +207,7 @@ const renderPage = async (req, onStart) => {
     const entry = await loadEntry();
     const page = await entry.render(url, {
       fallbackUrl: originOf(req),
-      onHead: onStart && (({ status, head }) => onStart({ status, html: entry.injectPage(template, { head }) })),
+      onHead: onStart && (({ status, head, lang }) => onStart({ status, html: entry.injectPage(template, { head, lang }) })),
     });
     if (page.redirect) return page;
     let html = entry.injectPage(template, page);
@@ -287,9 +287,18 @@ const sendPage = (res, page, cacheState) =>
     })
     .send(page.html);
 
+// A file nothing above served — /favicon.ico, a chunk of an older build under /assets/, Vite's
+// /@vite/client in production — is not a page: a plain 404, not the app's HTML (which a script or
+// stylesheet fails on, and which costs a render each time). Pages like /assets/btc still render.
+const MISSING_FILE = /^\/@(?:vite|id|fs|react-refresh)\b|^\/assets\/.+\.[a-z0-9]+$|\.(?:ico|png|jpe?g|gif|webp|avif|bmp|svg|css|map|woff2?|ttf|otf|eot|mp3|mp4|webm|ogg|wav|wasm)$/i;
+
 app.use(async (req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   const started = performance.now();
+  if (MISSING_FILE.test(req.path)) {
+    res.status(404).type('text/plain').send('Not found');
+    return logPage(req, 404, 'not found (file)', started);
+  }
   const key = `${originOf(req)}${req.originalUrl}`;
   try {
     const hit = cacheTtl ? pageCache.get(key) : null;

@@ -24,14 +24,15 @@ const siteUrl = () => {
 const setAside = new Set();
 const keyOf = (el) => headTagKey(el.outerHTML);
 
-/** Puts a page's renderHead() output into document.head. */
-function applyHead(html) {
+/** Puts a page's renderHead() output into document.head — all but its <title> with `keepTitle`. */
+function applyHead(html, { keepTitle = false } = {}) {
   const template = document.createElement('template');
   template.innerHTML = html;
-  const next = [...template.content.children];
+  const isKeptTitle = (el) => keepTitle && el.localName === 'title';
+  const next = [...template.content.children].filter((el) => !isKeptTitle(el));
   const nextKeys = new Set(next.map(keyOf).filter(Boolean));
   for (const el of setAside) {
-    if (nextKeys.has(keyOf(el))) continue;
+    if (nextKeys.has(keyOf(el)) || isKeptTitle(el)) continue;
     document.head.appendChild(el);
     setAside.delete(el);
   }
@@ -45,20 +46,28 @@ function applyHead(html) {
   const unplaced = new Map();
   for (const el of next) unplaced.set(el.outerHTML, [...(unplaced.get(el.outerHTML) || []), el]);
   for (const el of [...document.head.querySelectorAll('[data-seo]')]) {
-    if (unplaced.get(el.outerHTML)?.pop()) continue;
+    if (isKeptTitle(el) || unplaced.get(el.outerHTML)?.pop()) continue;
     el.remove();
   }
   for (const els of unplaced.values()) for (const el of els) document.head.appendChild(el);
 }
 
 let latest = 0;
-export async function syncDocumentHead(href, { initial = false } = {}) {
+/**
+ * `titleBefore`: document.title as the page started rendering (src/App.jsx). A page that has set
+ * its own since — document.title in an effect, before or after this resolves — keeps it; the rest
+ * of the head follows the route. The next page's title replaces it as usual.
+ */
+export async function syncDocumentHead(href, { initial = false, titleBefore } = {}) {
   const ticket = ++latest;
   const url = new URL(href, window.location.origin);
   const path = normalizePath(url.pathname);
   const base = siteUrl();
   if (initial && document.querySelector('title')?.getAttribute('data-seo-path') === path) return;
-  const { page } = await resolvePage(url.href).catch(() => ({ page: {} }));
+  const { page, site: pageSite } = await resolvePage(url.href).catch(() => ({ page: {}, site }));
   if (ticket !== latest) return;
-  applyHead(renderHead(page, site, base, path));
+  const keepTitle = titleBefore !== undefined && document.title !== titleBefore;
+  applyHead(renderHead(page, pageSite, base, path), { keepTitle });
+  // The page's language (its `lang` / `:lang`, or src/seo.config.js `languages`): index.html has the default one.
+  if (pageSite.lang) document.documentElement.lang = pageSite.lang;
 }

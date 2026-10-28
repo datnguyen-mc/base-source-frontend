@@ -1,5 +1,5 @@
 import "./App.css";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
@@ -11,6 +11,7 @@ import {
   Outlet,
   RouterProvider,
   ScrollRestoration,
+  useHref,
   useNavigationType,
   useLocation,
 } from "react-router-dom";
@@ -25,6 +26,7 @@ import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 import DefaultHome from "./pages/Home";
 import PoweredByBadge from "@/components/PoweredByBadge";
 import { syncDocumentHead } from "@/seo/client";
+import { browserBasename } from "@/seo/i18n";
 import { markHydrated, pageLoader, serverRendered } from "@/seo/ssr";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
@@ -67,12 +69,17 @@ function ScrollBehavior() {
  */
 function DocumentHeadSync() {
   const location = useLocation();
+  // The URL as the browser shows it: with the language prefix (the router's basename), if any.
+  const href = useHref({ pathname: location.pathname, search: location.search });
   const firstRender = useRef(true);
+  // The title as the page starts rendering, before its own effects run: one it sets itself
+  // (document.title = …) is kept (src/seo/client.js).
+  const titleBefore = useMemo(() => (typeof document === "undefined" ? undefined : document.title), [href]);
 
   useEffect(() => {
-    syncDocumentHead(location.pathname + location.search, { initial: firstRender.current });
+    syncDocumentHead(href, { initial: firstRender.current, titleBefore });
     firstRender.current = false;
-  }, [location.pathname, location.search]);
+  }, [href, titleBefore]);
 
   return null;
 }
@@ -192,11 +199,13 @@ export function AppProviders({ children, queryClient = queryClientInstance }) {
 }
 
 // Created on first render, not at import: the server imports this module too. A server-rendered
-// page's loader data (window.__staticRouterHydrationData) is picked up automatically.
+// page's loader data (window.__staticRouterHydrationData) is picked up automatically. On a
+// multi-language site (src/seo.config.js `languages`) the app is served under the URL's language
+// prefix: /kr/shop is the page "shop", and <Link to="/cart"> goes to /kr/cart.
 let browserRouter;
 
 function App() {
-  browserRouter ??= createBrowserRouter(routes);
+  browserRouter ??= createBrowserRouter(routes, { basename: browserBasename() });
   return (
     <AppProviders>
       <RouterProvider router={browserRouter} />
