@@ -6,11 +6,24 @@
 //     robots rules are edited there (served as it is).
 // ─────────────────────────────────────────────────────────────────────────────────────────
 export default {
+  // Multi-language with a fixed list: one URL prefix per language (/en/…, /kr/…), each with its
+  // own SEO — README "Multi-language". The first is the default: '/' and paths without a prefix
+  // redirect to it. Any text can be given per language, e.g. description: { en: '…', kr: '…' }.
+  // Leave it out for a single-language site, or for pages that carry the language in their own
+  // routes (':lang/products' in src/pages.config.js): those list it in `site.langs` below.
+  // languages: ['en', 'kr'],
+
   site: {
     name: 'VibeX APP',
     // Public origin, e.g. 'https://myapp.com'. The SITE_URL env var overrides it.
     url: '',
-    lang: 'en', // 'vi-VN' style also sets og:locale
+    lang: 'en', // 'vi-VN' style (or ko, ja, vi, th, id) also sets og:locale; a page's own `lang` wins; with `languages`, unused
+    // Languages of an app whose pages carry them in their routes (':lang/products/:id' in
+    // src/pages.config.js), e.g. ['ko', 'en'] — `lang` above is the default. Each page then gets
+    // the <html lang> / og:locale of its URL; '/' and URLs without a language answer 301 to the
+    // default language's (/products/3 → /ko/products/3), and a first segment that is none of them
+    // 404 (/xx/products). Pages without one (/login, /admin) stay as they are. Empty: one language.
+    langs: [],
     description: 'VibeX APP',
     keywords: '',
     image: '', // default social share image (1200×630)

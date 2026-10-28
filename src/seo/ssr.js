@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useHref, useLocation } from 'react-router-dom';
 import { endHydration, isHydrating } from '@/seo/hooks';
+import { defaultLanguage, languageOf, languages, localize, splitLanguage } from '@/seo/i18n';
 // True while rendering on the server, and in the browser when the page arrived server-rendered
 // (React hydrates that markup instead of starting from an empty #root).
 const isServer = typeof window === 'undefined';
@@ -63,4 +65,31 @@ export const pageLoader = (load, ms = 4000) => async (args) => {
 export function ClientOnly({ children, fallback = null }) {
   const [mounted] = useBrowserState(() => true, false);
   return mounted ? children : fallback;
+}
+
+/**
+ * The language of the page shown, on a multi-language site (src/seo.config.js `languages`) — in
+ * pages, the Layout and what they render (inside the router):
+ *
+ *   const { lang, languages, hrefIn } = useLanguage();
+ *   const t = TEXT[lang];                                    // TEXT = { en: {…}, kr: {…} }
+ *   {languages.map((l) => <a key={l.code} href={hrefIn(l.code)} hrefLang={l.hreflang}>{l.label}</a>)}
+ *
+ * `lang` is the URL prefix ('kr'), `hreflang` the language tag ('ko'). Links inside the app stay
+ * without the prefix (<Link to="/shop">, navigate('/cart')): the router adds the page's. A link
+ * to another language is a plain <a href={hrefIn(…)}>: the page loads again, in that language.
+ * On a single-language site `lang` is undefined and `languages` empty.
+ */
+export function useLanguage() {
+  // The router's basename is the URL's language prefix: '/kr' — '/' without one (the admin).
+  const lang = splitLanguage(useHref('/')).lang || defaultLanguage;
+  const { pathname, search } = useLocation();
+  const language = languageOf(lang);
+  return {
+    lang,
+    hreflang: language?.hreflang,
+    label: language?.label,
+    languages,
+    hrefIn: (code) => localize(pathname + search, code),
+  };
 }

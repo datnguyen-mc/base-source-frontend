@@ -5,7 +5,8 @@ import { parseAst, runnerImport } from 'vite';
 
 // Applies src/seo.config.js + src/seo.routes.js to every build mode:
 //   • index.html — its SEO tags are replaced by the site defaults, <html lang> gets site.lang
-//     (dev:ssr is left alone: server.js puts each page's own head in per request)
+//     (the default language's on a multi-language site; dev:ssr is left alone: server.js puts
+//     each page's own head and lang in per request)
 //   • SPA build  — emits robots.txt and sitemap.xml (static routes; SSR/SSG add dynamic ones)
 //   • `vite` dev — serves /robots.txt and /sitemap.xml, full-reloads when the config changes
 // A robots.txt / sitemap.xml the app ships in public/ (e.g. uploaded) wins: it is served / copied
@@ -169,7 +170,8 @@ export function seoPlugin() {
     },
     async transformIndexHtml(html, ctx) {
       const entry = await loadEntry();
-      html = html.replace(/<html([^>]*)\slang="[^"]*"/, (_match, attrs) => `<html${attrs} lang="${entry.siteLang()}"`);
+      // The same rewrite as each SSR page's (src/seo/head.js), so the two never differ.
+      html = entry.withLang(html, entry.siteLang());
       if (ctx.server?.config.server.middlewareMode) return html;
       return entry.injectPage(html, { head: entry.renderIndexHead() });
     },
