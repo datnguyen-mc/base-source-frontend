@@ -35,7 +35,8 @@ export default [
             'react/react-in-jsx-scope': 'off',
             'react/no-unknown-property': [
                 'error',
-                { ignore: ['cmdk-input-wrapper', 'toast-close'] },
+                // fetchpriority: React 18 renders it lowercase (it warns on fetchPriority, React 19's name).
+                { ignore: ['cmdk-input-wrapper', 'toast-close', 'fetchpriority'] },
             ],
             'react-hooks/rules-of-hooks': 'error',
         },
