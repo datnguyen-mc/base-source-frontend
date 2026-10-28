@@ -1,8 +1,9 @@
 import { renderToString } from 'react-dom/server';
-import { createStaticHandler, createStaticRouter, isRouteErrorResponse, StaticRouterProvider } from 'react-router-dom';
+import { createStaticHandler, createStaticRouter, isRouteErrorResponse, matchRoutes, StaticRouterProvider } from 'react-router-dom';
 import { QueryClient } from '@tanstack/react-query';
 import { AppProviders, routes } from '@/App';
 import { SsrEffectsContext } from '@/seo/hooks';
+import { basenameOf } from '@/seo/i18n';
 import { purifyCallsWithoutDom, serverDomLoaded } from '@/seo/server-dom';
 import { createEffectsRun } from '@/seo/server-effects';
 // Renders the real React app for one URL: page loaders run first, then the same component tree
@@ -10,7 +11,25 @@ import { createEffectsRun } from '@/seo/server-effects';
 // rendered, the requests its effects made are awaited, and it is rendered again until nothing
 // changes. The browser hydrates that markup from the same loader data and states instead of
 // starting from a loading screen.
-const handler = createStaticHandler(routes);
+// One per language prefix (src/seo/i18n.js): /kr/shop is the app's /shop under the basename /kr,
+// as in the browser. A single-language site has just the one, without a basename.
+const handlers = new Map();
+const handlerFor = (href) => {
+  const basename = basenameOf(new URL(href).pathname);
+  if (!handlers.has(basename)) handlers.set(basename, createStaticHandler(routes, { basename }));
+  return handlers.get(basename);
+};
+/**
+ * The route of the app (src/App.jsx) a path renders: { pattern: '/:lang/products/:id', params },
+ * or null for none — its 404 route ('*'). The index route's pattern is '/'.
+ */
+export const pagePattern = (pathname) => {
+  const matches = matchRoutes(routes, pathname);
+  const leaf = matches?.at(-1);
+  if (!leaf || leaf.route.path === '*') return null;
+  const pattern = `/${matches.map((match) => match.route.path).filter(Boolean).join('/')}`.replace(/\/{2,}/g, '/');
+  return { pattern, params: leaf.params };
+};
 // Time the effects of one page get to load their data (ms), and render passes at most.
 const EFFECTS_TIMEOUT = Number(process.env.SSR_EFFECTS_TIMEOUT ?? 3000);
 const MAX_PASSES = 8;
@@ -51,6 +70,7 @@ const hydrationScript = (context, state, responses) => {
 export async function renderApp(href) {
   const purifyCallsBefore = purifyCallsWithoutDom();
   const started = performance.now();
+  const handler = handlerFor(href);
   const context = await handler.query(new Request(href));
   const loaded = performance.now();
   if (context instanceof Response) {
