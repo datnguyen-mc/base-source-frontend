@@ -11,7 +11,6 @@ import {
   Outlet,
   RouterProvider,
   ScrollRestoration,
-  useHref,
   useNavigationType,
   useLocation,
 } from "react-router-dom";
@@ -26,7 +25,6 @@ import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 import DefaultHome from "./pages/Home";
 import PoweredByBadge from "@/components/PoweredByBadge";
 import { syncDocumentHead } from "@/seo/client";
-import { browserBasename } from "@/seo/i18n";
 import { markHydrated, pageLoader, serverRendered } from "@/seo/ssr";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
@@ -69,14 +67,12 @@ function ScrollBehavior() {
  */
 function DocumentHeadSync() {
   const location = useLocation();
-  // The URL as the browser shows it: with the language prefix (the router's basename), if any.
-  const href = useHref({ pathname: location.pathname, search: location.search });
   const firstRender = useRef(true);
 
   useEffect(() => {
-    syncDocumentHead(href, { initial: firstRender.current });
+    syncDocumentHead(location.pathname + location.search, { initial: firstRender.current });
     firstRender.current = false;
-  }, [href]);
+  }, [location.pathname, location.search]);
 
   return null;
 }
@@ -196,13 +192,11 @@ export function AppProviders({ children, queryClient = queryClientInstance }) {
 }
 
 // Created on first render, not at import: the server imports this module too. A server-rendered
-// page's loader data (window.__staticRouterHydrationData) is picked up automatically. On a
-// multi-language site (src/seo.config.js `languages`) the app is served under the URL's language
-// prefix: /kr/shop is the page "shop", and <Link to="/cart"> goes to /kr/cart.
+// page's loader data (window.__staticRouterHydrationData) is picked up automatically.
 let browserRouter;
 
 function App() {
-  browserRouter ??= createBrowserRouter(routes, { basename: browserBasename() });
+  browserRouter ??= createBrowserRouter(routes);
   return (
     <AppProviders>
       <RouterProvider router={browserRouter} />

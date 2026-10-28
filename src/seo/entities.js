@@ -1,5 +1,4 @@
 import { vibex } from '@/api/vibexClient';
-import { pageLanguage } from '@/seo/i18n';
 // Data access for src/seo.config.js — the SAME entities the pages use, flattened so a config
 // never deals with response envelopes:
 //
@@ -70,9 +69,6 @@ const fetchFresh = async (key, call, shape) => {
   return value;
 };
 const read = (key, call, shape) => {
-  // The API answers in the page's language (src/seo/i18n.js): kept apart per language.
-  const lang = pageLanguage();
-  if (lang) key = `${lang}:${key}`;
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value);
   // Identical reads in flight (two crawlers on one page) share a single request.

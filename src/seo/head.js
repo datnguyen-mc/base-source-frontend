@@ -37,13 +37,8 @@ const isoDate = (value) => {
   const date = value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toISOString() : undefined;
 };
-// og:locale wants language_TERRITORY ('vi_VN'). A bare language gets one only where there is a
-// single obvious one ('ko' → 'ko_KR'); others ('en') are left out.
-const TERRITORY = { ko: 'KR', ja: 'JP', vi: 'VN', th: 'TH', id: 'ID' };
-const ogLocale = (lang) => {
-  if (/^[a-z]{2,3}[-_][a-z]{2}$/i.test(lang || '')) return lang.replace('-', '_');
-  return TERRITORY[lang] ? `${lang}_${TERRITORY[lang]}` : '';
-};
+// og:locale wants language_TERRITORY ('vi_VN'); a bare language ('en') is left out.
+const ogLocale = (lang) => (/^[a-z]{2,3}[-_][a-z]{2}$/i.test(lang || '') ? lang.replace('-', '_') : '');
 const tag = (name, attrs) =>
   `<${name} ${Object.entries(attrs)
     .map(([key, value]) => `${key}="${escapeHtml(value)}"`)
@@ -60,15 +55,13 @@ const SCHEMA = 'https://schema.org';
 const structuredData = (page, site, siteUrl, path) => {
   if (page.noindex) return [];
   const crumbs = list(page.breadcrumbs).filter((crumb) => crumb.name && crumb.url);
-  // site.home: the home page of the page's language on a multi-language site ('/kr').
-  const home = site.home || '/';
   return [
     // The site name (and search box, with site.searchUrl) Google shows for the site.
-    path === home && siteUrl && site.name && {
+    path === '/' && siteUrl && site.name && {
       '@context': SCHEMA,
       '@type': 'WebSite',
       name: site.name,
-      url: home === '/' ? `${siteUrl}/` : `${siteUrl}${home}`,
+      url: `${siteUrl}/`,
       ...(site.searchUrl && {
         potentialAction: {
           '@type': 'SearchAction',
@@ -102,10 +95,6 @@ export function renderHead(page, site, siteUrl, path) {
   const canonical = siteUrl && path && !page.noindex ? `${siteUrl}${page.canonical || path}` : '';
   const ogType = OG_TYPES[page.type] || 'website';
   const locale = ogLocale(site.lang);
-  // The page's other languages, from its hreflang alternates.
-  const otherLocales = page.noindex
-    ? []
-    : [...new Set(alternatesOf(page.alternates).map((alt) => ogLocale(alt.hreflang)))].filter((other) => other && other !== locale);
   const article = ogType === 'article';
   const published = article && isoDate(page.publishedAt);
   const modified = article && isoDate(page.updatedAt);
@@ -131,7 +120,6 @@ export function renderHead(page, site, siteUrl, path) {
     imageAlt && seoTag('meta', { property: 'og:image:alt', content: imageAlt }),
     canonical && seoTag('meta', { property: 'og:url', content: canonical }),
     locale && seoTag('meta', { property: 'og:locale', content: locale }),
-    ...otherLocales.map((other) => seoTag('meta', { property: 'og:locale:alternate', content: other })),
     published && seoTag('meta', { property: 'article:published_time', content: published }),
     modified && seoTag('meta', { property: 'article:modified_time', content: modified }),
     article && page.author && seoTag('meta', { property: 'article:author', content: page.author }),
@@ -177,21 +165,8 @@ const pageSpecific = (key) =>
   key.startsWith('property:article:');
 /** Key of one head tag's HTML ('title', 'name:description', 'property:og:image', 'rel:canonical'…), or null. */
 export const headTagKey = keyOf;
-/** <html lang="…"> — added, or the one index.html has replaced (SSR, and the build's index.html). */
-export const withLang = (template, lang) =>
-  lang
-    ? template.replace(/<html\b[^>]*>/i, (open) =>
-        /\slang\s*=\s*["'][^"']*["']/i.test(open)
-          ? open.replace(/\slang\s*=\s*["'][^"']*["']/i, ` lang="${escapeHtml(lang)}"`)
-          : open.replace(/^<html/i, `<html lang="${escapeHtml(lang)}"`),
-      )
-    : template;
-/**
- * index.html with the page's head tags, crawlable HTML (`html`, inserted into #root) and
- * language (`lang`, on <html>).
- */
-export function injectPage(template, { head = '', html = '', lang = '' } = {}) {
-  template = withLang(template, lang);
+/** index.html with the page's head tags and crawlable HTML (`html`, inserted into #root). */
+export function injectPage(template, { head = '', html = '' } = {}) {
   const end = template.search(/<\/head>/i);
   if (end < 0) return template;
   const replaced = new Set((head.match(HEAD_TOKEN) || []).map(keyOf).filter(Boolean));
@@ -266,23 +241,17 @@ export function renderRobots(config, siteUrl) {
     '',
   ].join('\n');
 }
-/** `alternatesOf(path)` → the page's hreflang alternates, [{ hreflang, href }] (multi-language sites). */
-export function renderSitemap(config, paths, siteUrl, alternatesOf) {
+export function renderSitemap(config, paths, siteUrl) {
   const sitemap = config.sitemap || {};
   const exclude = new Set(sitemap.exclude || []);
   const urls = [...new Set([...paths, ...(sitemap.extra || [])])].filter((path) => !exclude.has(path));
-  const full = (path) => escapeHtml(/^https?:\/\//.test(path) ? path : `${siteUrl}${path}`);
   const body = urls
     .map(
       (path) =>
-        `  <url>\n    <loc>${full(path)}</loc>\n` +
-        (alternatesOf?.(path) || [])
-          .map((alt) => `    <xhtml:link rel="alternate" hreflang="${escapeHtml(alt.hreflang)}" href="${full(alt.href)}"/>\n`)
-          .join('') +
+        `  <url>\n    <loc>${escapeHtml(/^https?:\/\//.test(path) ? path : `${siteUrl}${path}`)}</loc>\n` +
         (sitemap.changefreq ? `    <changefreq>${sitemap.changefreq}</changefreq>\n` : '') +
         '  </url>',
     )
     .join('\n');
-  const xhtml = body.includes('<xhtml:link') ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' : '';
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${xhtml}>\n${body}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
 }
