@@ -1,7 +1,15 @@
 // =============================================================
 // vibexClient SDK
-import { localize, pageLanguage, splitLanguage } from "@/seo/i18n";
 // ================== helpers ==================
+// Language of a page from its URL: the first path segment when it is a language code —
+function langFromUrl(url) {
+  try {
+    const segment = new URL(url, "http://localhost").pathname.split("/")[1] || "";
+    return /^[a-z]{2}(?:-[a-z]{2,4})?$/i.test(segment) ? segment.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
 function ensureBase(url) {
   return url.endsWith("/") ? url : url + "/";
 }
@@ -76,10 +84,7 @@ const LOGIN_RELOAD_KEY = "vx_login_reload";
 // reloadIfSamePage=false skips step 5, so the 401 handler can never start a reload loop.
 async function redirectToLogin({ reloadIfSamePage = true } = {}) {
   if (typeof window === "undefined") return;
-  // Multi-language site (src/seo/i18n.js): the paths below are without the language prefix (/kr),
-  // which goes back on the destination. `next` stays without it: the login page navigate()s to it.
-  const { search } = window.location;
-  const { lang, path: pathname } = splitLanguage(window.location.pathname);
+  const { pathname, search } = window.location;
 
   // 1. Current page, so the user comes back here after logging in
   const currentPage = pathname + search;
@@ -104,10 +109,9 @@ async function redirectToLogin({ reloadIfSamePage = true } = {}) {
   }
 
   // 4. Destination differs from the current page → navigate
-  target = localize(target, lang);
   const clean = (path) => (path.replace(/\/+$/, "") || "/").toLowerCase();
   const targetPath = target.split("?")[0];
-  if (clean(targetPath) !== clean(window.location.pathname)) {
+  if (clean(targetPath) !== clean(pathname)) {
     window.location.replace(target);
     return;
   }
@@ -151,12 +155,11 @@ function createHttp(cfg) {
   };
 
   const getRequestLang = () => {
-    // The page's language on a multi-language site (/kr/… → ko) — on the server too, per page.
-    const page = pageLanguage();
-    if (page) return page.split("-")[0];
     if (typeof window === "undefined") return undefined;
     try {
+      // The page's language from its URL first (/ko/san-pham/… → "ko"), then the defaults.
       const lang =
+        langFromUrl(window.location.href) ||
         localStorage.getItem("i18nextLng") ||
         window.navigator?.languages?.[0] ||
         window.navigator?.language ||
@@ -170,7 +173,6 @@ function createHttp(cfg) {
   const request = async (path, init = {}) => {
     const url = buildUrl(path, init.query);
     const currentToken = typeof window !== "undefined" ? (localStorage.getItem(storageKey) ?? token) : token;
-    const requestLang = getRequestLang();
     let res;
     try {
       res = await fetchImpl(url, {
@@ -180,7 +182,7 @@ function createHttp(cfg) {
           ...(init.headers || {}),
           ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
           // Add language header
-          ...(requestLang ? { "Accept-Language": requestLang } : {}),
+          ...(typeof window !== "undefined" ? { "Accept-Language": getRequestLang() } : {}),
           // Add timezone offset header
           ...(typeof window !== "undefined" ? { "x-timezone-offset": String(-(new Date().getTimezoneOffset())) } : {}),
           // Add X-App-Id header if configured

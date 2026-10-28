@@ -128,9 +128,11 @@ async function renderPage(url, { fallbackUrl, onHead } = {}) {
     return { status, head, html: crawlerView(page, pageSite), lang, mode: 'fallback', timings };
   }
   if (result.redirect) return { status: result.status, redirect: result.redirect, mode: 'redirect' };
+  // The app rendered its 404 page for a URL the meta had nothing against: the head of a page not found.
+  const appNotFound = result.status === 404 && status === 200;
   return {
     status: result.status === 200 ? status : result.status,
-    head: `${head}\n    ${result.script}`,
+    head: `${appNotFound ? renderHead(notFoundPage, pageSite, siteUrl, path) : head}\n    ${result.script}`,
     html: result.html,
     script: result.script,
     lang,

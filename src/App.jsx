@@ -1,5 +1,5 @@
 import "./App.css";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
@@ -72,11 +72,14 @@ function DocumentHeadSync() {
   // The URL as the browser shows it: with the language prefix (the router's basename), if any.
   const href = useHref({ pathname: location.pathname, search: location.search });
   const firstRender = useRef(true);
+  // The title as the page starts rendering, before its own effects run: one it sets itself
+  // (document.title = …) is kept (src/seo/client.js).
+  const titleBefore = useMemo(() => (typeof document === "undefined" ? undefined : document.title), [href]);
 
   useEffect(() => {
-    syncDocumentHead(href, { initial: firstRender.current });
+    syncDocumentHead(href, { initial: firstRender.current, titleBefore });
     firstRender.current = false;
-  }, [href]);
+  }, [href, titleBefore]);
 
   return null;
 }

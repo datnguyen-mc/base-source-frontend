@@ -135,7 +135,8 @@ export default [
 
 `entities.X.get(id)` / `.list({ filter, sort, limit })` / `.findOne(filter)` are the app's own
 entities, returning plain rows — `null` / `[]` when there is no data; return `null` from `load`
-for a 404. When the backend itself is down, SSR answers **503** with the SPA shell (crawlers
+for a 404. A URL no route of the app matches (its `*` page) is a **404** + `noindex` too, and a
+missing file (`/favicon.ico`, an old `/assets/` chunk) a plain 404, never the app's HTML. When the backend itself is down, SSR answers **503** with the SPA shell (crawlers
 retry instead of dropping the page) and `build:ssg` fails. The same files also keep the head
 right in the browser — no per-page code needed: on every navigation `src/seo/client.js` renders
 the page's head with the same `renderHead()` the server uses. Every tag it writes carries
@@ -233,10 +234,12 @@ const t = TEXT[lang];                                    // TEXT = { en: {…}, 
 yourself where that is not enough: `languages: { en: {}, kr: { hreflang: 'ko-KR', label: '한국어' } }`.
 `site.lang` is not used then.
 
-**6. The API is asked in the page's language.** The SDK sends `Accept-Language` from the URL
-(`/kr/…` → `ko`) — on the server too, each page in its own, and `src/seo/entities.js` caches per
-language. A page without a language (`/admin`) keeps the browser's. A login redirect stays in the
-language: `/kr/cart` → `/kr/login?next=%2Fcart` (`next` without the prefix, for `navigate(next)`).
+**6. The SDK knows nothing of languages** (`src/sdk` and `src/api` stay as in apps without SSR):
+the API gets the browser's `Accept-Language`, not the URL's, and none from the server, while
+`src/seo/entities.js` still caches per language. Its login redirect from `/kr/cart` goes to
+`/login?next=%2Fkr%2Fcart`, which moves to the default language (`/en/login`), and `next` keeps
+its prefix — so a login page leaves with `window.location.assign(next)`, not `navigate(next)`
+(which would put it under the current one: `/en/kr/cart`).
 
 A URL without a language (`/`, `/shop?x=1`) answers **302** to the default language's (`/en`,
 `/en/shop?x=1`); the SPA build moves it in the browser. Files (`/ads.txt`) are left alone, and

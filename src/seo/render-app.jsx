@@ -76,6 +76,8 @@ export async function renderApp(href) {
   if (context instanceof Response) {
     return { redirect: context.headers.get('Location'), status: context.status };
   }
+  // The app's own 404 route ('*' in src/App.jsx): a page that does not exist is a 404, not a 200.
+  const status = context.statusCode === 200 && context.matches.at(-1)?.route.path === '*' ? 404 : context.statusCode;
   const router = createStaticRouter(handler.dataRoutes, context);
   // A fresh query cache per request: nothing cached for one visitor leaks to the next.
   const queryClient = new QueryClient();
@@ -127,5 +129,5 @@ export async function renderApp(href) {
     effects: Math.round(performance.now() - loaded - renderMs),
     render: Math.round(renderMs),
   };
-  return { html: page.html, script: hydrationScript(context, page.state, run.responses()), status: context.statusCode, timings };
+  return { html: page.html, script: hydrationScript(context, page.state, run.responses()), status, timings };
 }
