@@ -207,7 +207,7 @@ const renderPage = async (req, onStart) => {
     const entry = await loadEntry();
     const page = await entry.render(url, {
       fallbackUrl: originOf(req),
-      onHead: onStart && (({ status, head, lang }) => onStart({ status, html: entry.injectPage(template, { head, lang }) })),
+      onHead: onStart && (({ status, head }) => onStart({ status, html: entry.injectPage(template, { head }) })),
     });
     if (page.redirect) return page;
     let html = entry.injectPage(template, page);
