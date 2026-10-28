@@ -184,8 +184,8 @@ if (isProduction) {
 // the same HTML: it is kept SSR_CACHE_TTL seconds (default 60 in production, off in dev). After
 // that the old copy is still answered at once — for up to SSR_CACHE_STALE seconds (default 600) —
 // while a fresh one renders in the background. Only good pages are kept, never an error or a 503.
-const cacheTtl = Number(process.env.SSR_CACHE_TTL ?? (isProduction ? 60 : 0)) * 1000;
-const cacheStale = Number(process.env.SSR_CACHE_STALE ?? 600) * 1000;
+const cacheTtl = Number(process.env.SSR_CACHE_TTL ?? 0) * 1000;
+const cacheStale = Number(process.env.SSR_CACHE_STALE ?? 0) * 1000;
 const CACHE_MAX = 500;
 const pageCache = new Map();
 const cacheable = (page) => ['rendered', 'client'].includes(page.mode) && [200, 404].includes(page.status);
