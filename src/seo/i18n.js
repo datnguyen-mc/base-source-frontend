@@ -111,7 +111,10 @@ export const siteIn = (site, lang) => {
   // Any declared language resolves `site` per language, whether or not it is a URL prefix.
   if (!language && !routeLanguages.includes(lang)) return site;
   const tag = language?.hreflang || languageTag(lang);
-  const out = fieldsIn(site, lang);
+  // `site.locales[lang]` over the site's own fields; an empty value keeps the site's.
+  const { locales, ...own } = site;
+  const local = Object.entries(locales?.[lang] || {}).filter(([, value]) => value !== '' && value != null);
+  const out = fieldsIn({ ...own, ...Object.fromEntries(local) }, lang);
   // A search URL that already starts with a route language is not prefixed again.
   const searchUrl = !language && routeLanguageOf(out.searchUrl || '') ? out.searchUrl : localize(out.searchUrl, lang);
   return { ...out, lang: tag, home: `/${lang}`, searchUrl };

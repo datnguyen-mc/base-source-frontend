@@ -24,8 +24,13 @@ export const describe = (value, fallback = '') => {
   if (!text) return fallback;
   return text.length > 160 ? `${text.slice(0, 157).trimEnd()}…` : text;
 };
-// The page's title as it is — the site name is not added to it; a page without one shows the site name.
-export const pageTitle = (title, site) => (title ? String(title) : site.name || '');
+// 'Contact' → 'Contact | myapp'; no title, or the name itself → the name.
+export const pageTitle = (title, site) => {
+  const name = site?.name || '';
+  const text = title ? String(title) : '';
+  if (!text || text === name) return name;
+  return name ? `${text} | ${name}` : text;
+};
 export const resolveSiteUrl = (site, fallback = '') =>
   String((typeof process !== 'undefined' && process.env?.SITE_URL) || site.url || fallback).replace(/\/+$/, '');
 const absolute = (value, siteUrl) =>
@@ -178,10 +183,10 @@ export const headTagKey = keyOf;
 export const withLang = (template, lang) =>
   lang
     ? template.replace(/<html\b[^>]*>/i, (open) =>
-        /\slang\s*=\s*["'][^"']*["']/i.test(open)
-          ? open.replace(/\slang\s*=\s*["'][^"']*["']/i, ` lang="${escapeHtml(lang)}"`)
-          : open.replace(/^<html/i, `<html lang="${escapeHtml(lang)}"`),
-      )
+      /\slang\s*=\s*["'][^"']*["']/i.test(open)
+        ? open.replace(/\slang\s*=\s*["'][^"']*["']/i, ` lang="${escapeHtml(lang)}"`)
+        : open.replace(/^<html/i, `<html lang="${escapeHtml(lang)}"`),
+    )
     : template;
 /**
  * index.html with the page's head tags, crawlable HTML (`html`, inserted into #root) and
