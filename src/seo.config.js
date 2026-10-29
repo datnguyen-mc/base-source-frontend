@@ -13,7 +13,8 @@
  *   image        default social share image (1200×630)
  *   twitterSite  '@myapp'
  *   searchUrl    '/search?q={search_term_string}' — the search box in Google results
- * Any text can be given per language: description: { en: '…', kr: '…' }.
+ * Every value here is ONE language, the default one — per-language text belongs in
+ * src/seo.routes.js, one entry per language.
  *
  * languages: ['en', 'kr'] — the other way round: one URL prefix per language (/en/…, /kr/…), each
  *   with its own SEO, the first the default, '/' redirecting to it. Declare it at the top level

@@ -50,6 +50,7 @@ export default defineConfig(({ mode, isSsrBuild }) => {
       copyPublicDir: !isSsrBuild,
     },
     server: {
+      host: "0.0.0.0",
       port: 5173,
       allowedHosts: true,
       hmr: {
