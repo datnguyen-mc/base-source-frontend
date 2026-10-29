@@ -3,7 +3,19 @@ import config from '@/seo.config';
 import routeFile from '@/seo.routes';
 import { entities, SeoDataUnavailableError } from '@/seo/entities';
 import { resolveSiteUrl } from '@/seo/head';
-import { alternatesFor, asLanguage, defaultLanguage, fieldsIn, languages, localize, ownLanguage, siteIn, splitLanguage } from '@/seo/i18n';
+import {
+  alternatesFor,
+  asLanguage,
+  defaultLanguage,
+  fieldsIn,
+  languages,
+  localize,
+  ownLanguage,
+  routeDefault,
+  routeLanguageOf,
+  siteIn,
+  splitLanguage,
+} from '@/seo/i18n';
 import indexHtmlSite from '@/seo/index-html';
 // Resolves a URL against the routes in src/seo.routes.js. Shared by the SSR server, build:ssg,
 // the Vite plugin and the client. Order does not matter: the most specific path wins. On a
@@ -49,7 +61,7 @@ const runRoute = async (route, ctx) => {
 // A page in its language: values given per language picked, and the paths of this site's pages it
 // names (written without a language) put in the URL's. hreflang alternates come with it.
 const pageIn = (page, lang, urlLang, path) => {
-  if (!defaultLanguage) return page;
+  if (!defaultLanguage && !routeDefault) return page;
   const out = fieldsIn(page, lang, ['alternates']);
   if (!urlLang) return out;
   const at = (href) => localize(href, urlLang);
@@ -74,7 +86,8 @@ export async function resolvePage(href, base = DEFAULT_BASE) {
   const path = normalizePath(url.pathname);
   // A path without a language (the admin) reads in the default one.
   const { lang: urlLang, path: routePath } = splitLanguage(path);
-  const lang = urlLang || defaultLanguage;
+  // The URL's language — its prefix, or the route language it starts with — else the default.
+  const lang = urlLang || defaultLanguage || routeLanguageOf(path) || routeDefault;
   const pageSite = siteIn(site, lang);
   // The page's own language (its `lang`, or the URL's) wins: <html lang>, og:locale.
   const siteFor = (page, params) => {

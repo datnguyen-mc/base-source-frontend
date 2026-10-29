@@ -85,14 +85,19 @@ export const browserBasename = () => {
 
 // ── Values given per language ────────────────────────────────────────────────────────────────
 const isPlain = (value) => value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype;
-const isPerLanguage = (value) => isPlain(value) && Object.keys(value).length > 0 && Object.keys(value).every((key) => codes.has(key));
+// A language code the config declares, in any of its forms.
+const isLanguageKey = (key) => codes.has(key) || routeLanguages.includes(key);
+const isPerLanguage = (value) => isPlain(value) && Object.keys(value).length > 0 && Object.keys(value).every(isLanguageKey);
+/** The default language the config declares, in any of its forms. */
+const defaultCode = () => defaultLanguage || routeDefault;
 /**
  * { en: 'Shop', kr: '쇼핑' } in one language — the default's where that one is missing — wherever
  * it sits (a breadcrumb's name, a field of jsonLd). Any other value as is.
  */
 export const inLanguage = (value, lang) => {
-  if (!defaultLanguage) return value;
-  if (isPerLanguage(value)) return value[lang] ?? value[defaultLanguage] ?? Object.values(value)[0];
+  const fallback = defaultCode();
+  if (!fallback) return value;
+  if (isPerLanguage(value)) return value[lang] ?? value[fallback] ?? Object.values(value)[0];
   if (Array.isArray(value)) return value.map((entry) => inLanguage(entry, lang));
   return isPlain(value) ? fieldsIn(value, lang) : value;
 };
@@ -103,9 +108,13 @@ export const fieldsIn = (fields, lang, skip = []) =>
 /** src/seo.config.js `site` in one language: its fields picked, `lang` that language's tag, `home` its home page. */
 export const siteIn = (site, lang) => {
   const language = languageOf(lang);
-  if (!language) return site;
+  // Any declared language resolves `site` per language, whether or not it is a URL prefix.
+  if (!language && !routeLanguages.includes(lang)) return site;
+  const tag = language?.hreflang || languageTag(lang);
   const out = fieldsIn(site, lang);
-  return { ...out, lang: language.hreflang, home: `/${lang}`, searchUrl: localize(out.searchUrl, lang) };
+  // A search URL that already starts with a route language is not prefixed again.
+  const searchUrl = !language && routeLanguageOf(out.searchUrl || '') ? out.searchUrl : localize(out.searchUrl, lang);
+  return { ...out, lang: tag, home: `/${lang}`, searchUrl };
 };
 
 // ── Languages in the app's routes: src/seo.config.js `site.langs` ──────────────────────────────
