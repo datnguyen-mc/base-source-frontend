@@ -4,12 +4,19 @@ import routeFile from '@/seo.routes';
 import { entities, SeoDataUnavailableError } from '@/seo/entities';
 import { resolveSiteUrl } from '@/seo/head';
 import { alternatesFor, asLanguage, defaultLanguage, fieldsIn, languages, localize, ownLanguage, siteIn, splitLanguage } from '@/seo/i18n';
+import indexHtmlSite from '@/seo/index-html';
 // Resolves a URL against the routes in src/seo.routes.js. Shared by the SSR server, build:ssg,
 // the Vite plugin and the client. Order does not matter: the most specific path wins. On a
 // multi-language site (src/seo/i18n.js) the URL's language prefix is set aside first: /kr/shop is
 // the route '/shop', in Korean.
 export { config };
-export const site = config.site || {};
+// In CSR, what index.html says (src/seo/index-html.js) wins over src/seo.config.js — but
+// for a value the config gives per language ({ en: '…', kr: '…' }), which index.html cannot.
+const fromIndexHtml = Object.entries(indexHtmlSite || {}).filter(([key]) => {
+  const own = config.site?.[key];
+  return !(own && typeof own === 'object');
+});
+export const site = { ...(config.site || {}), ...Object.fromEntries(fromIndexHtml) };
 export const siteUrlOf = (fallback) => resolveSiteUrl(site, fallback);
 const DEFAULT_BASE = 'http://localhost';
 const NOT_FOUND = { title: 'Page not found', noindex: true };

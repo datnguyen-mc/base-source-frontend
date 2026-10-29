@@ -165,6 +165,13 @@ description, Open Graph, Twitter, canonical…) are replaced, and the new ones a
 `</head>`; the crawlable HTML goes into `<div id="root">`. Tags the config does not provide
 (e.g. an icon) are kept.
 
+In CSR — `npm run dev` and the SPA build (`npm run build`) — `index.html` comes first: its own
+site-wide tags (title, description, keywords, `og:image`, icons, theme color, `twitter:site`, the
+canonical's origin, `<html lang>`) win over `site` in `src/seo.config.js`, which fills in only what
+`index.html` lacks (and keeps any value it gives per language). The index head, and each page's head
+in the browser, then follow `index.html`. Server-rendered modes (`dev:ssr`, `build:ssr`,
+`build:ssg`) use `src/seo.config.js` alone.
+
 `src/seo/` (engine), `src/entry-server.js`, `server.js`, `scripts/prerender.js` and
 `vite-plugins/seo-plugin.js` are shared infrastructure — the same in every app; only
 `src/seo.config.js` and `src/seo.routes.js` belong to the app.
