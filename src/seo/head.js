@@ -24,15 +24,8 @@ export const describe = (value, fallback = '') => {
   if (!text) return fallback;
   return text.length > 160 ? `${text.slice(0, 157).trimEnd()}…` : text;
 };
-export const pageTitle = (title, site) => {
-  const name = site.name || '';
-  if (!title || title === name) return name;
-  const text = String(title);
-  if (!name) return text;
-  // A title that already has the site name at either end, next to the separator, is kept as is.
-  const carriesName = text.startsWith(`${name} |`) || text.endsWith(`| ${name}`);
-  return carriesName ? text : `${text} | ${name}`;
-};
+// The page's title as it is — the site name is not added to it; a page without one shows the site name.
+export const pageTitle = (title, site) => (title ? String(title) : site.name || '');
 export const resolveSiteUrl = (site, fallback = '') =>
   String((typeof process !== 'undefined' && process.env?.SITE_URL) || site.url || fallback).replace(/\/+$/, '');
 const absolute = (value, siteUrl) =>
