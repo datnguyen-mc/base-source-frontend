@@ -6,7 +6,8 @@ import { parseAst, runnerImport } from 'vite';
 // Applies src/seo.config.js + src/seo.routes.js to every build mode:
 //   • index.html — its SEO tags are replaced by the site defaults, <html lang> gets site.lang
 //     (the default language's on a multi-language site; dev:ssr is left alone: server.js puts
-//     each page's own head and lang in per request)
+//     each page's own head and lang in per request). In CSR (`vite`, the SPA build) the
+//     site-wide tags index.html has itself win over `site` (src/seo/index-html.js)
 //   • SPA build  — emits robots.txt and sitemap.xml (static routes; SSR/SSG add dynamic ones)
 //   • `vite` dev — serves /robots.txt and /sitemap.xml, full-reloads when the config changes
 // A robots.txt / sitemap.xml the app ships in public/ (e.g. uploaded) wins: it is served / copied
@@ -135,16 +136,84 @@ const dompurifyFallback = {
   },
 };
 
+// ── CSR: index.html first ────────────────────────────────────────────────────────────────────
+// When the app renders in the browser alone — `vite` and the SPA build (`npm run build`) —
+// src/seo/index-html.js is the site-wide values of index.html's own <head>, named as `site` in
+// src/seo.config.js names them (the first tag listed that has one; `url` the origin of its
+// canonical), and src/seo/engine.js lays them over `site`. Read anew when index.html changes.
+// Server-rendered modes keep src/seo.config.js alone (null): dev:ssr (Vite in middleware mode
+// under server.js), build:ssr and build:ssg — their client build too, so on navigation the browser
+// renders each page's head as the server did.
+const INDEX_HTML_MODULE = 'src/seo/index-html.js';
+const SERVER_RENDERED_SCRIPT = /:(?:ssr|ssg)$/;
+const INDEX_HTML_FIELDS = {
+  name: ['title', 'property:og:site_name', 'name:apple-mobile-web-app-title'],
+  description: ['name:description', 'property:og:description', 'name:twitter:description'],
+  keywords: ['name:keywords'],
+  image: ['property:og:image', 'name:twitter:image'],
+  favicon: ['rel:icon', 'rel:shortcut icon'],
+  appleTouchIcon: ['rel:apple-touch-icon'],
+  themeColor: ['name:theme-color'],
+  twitterSite: ['name:twitter:site'],
+};
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decodeHtml = (text) =>
+  text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, ref) => {
+    if (ref[0] !== '#') return ENTITIES[ref.toLowerCase()] ?? entity;
+    const code = /^#x/i.test(ref) ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
+    return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+  });
+const attrOf = (tag, name) => {
+  const match = tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i'));
+  return match ? decodeHtml(match[1] ?? match[2] ?? match[3]).trim() : '';
+};
+/** index.html → { name, description, image, favicon, lang, … }: only what it has. */
+const indexHtmlSite = (html) => {
+  const head = (html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] ?? '').replace(/<!--[\s\S]*?-->|<(script|style)\b[\s\S]*?<\/\1>/gi, '');
+  const found = {};
+  for (const [tag, title] of head.matchAll(/<title\b[^>]*>([\s\S]*?)<\/title>|<(?:meta|link)\b[^>]*>/gi)) {
+    const isMeta = /^<meta/i.test(tag);
+    const kind = title !== undefined ? 'title' : isMeta ? (attrOf(tag, 'name') ? 'name' : 'property') : 'rel';
+    const key = kind === 'title' ? 'title' : attrOf(tag, kind) && `${kind}:${attrOf(tag, kind).toLowerCase()}`;
+    const value = title !== undefined ? decodeHtml(title).replace(/\s+/g, ' ').trim() : attrOf(tag, isMeta ? 'content' : 'href');
+    if (key && value && !(key in found)) found[key] = value;
+  }
+  const site = {};
+  for (const [field, keys] of Object.entries(INDEX_HTML_FIELDS)) {
+    const value = keys.map((key) => found[key]).find(Boolean);
+    if (value) site[field] = value;
+  }
+  const url = ['rel:canonical', 'property:og:url'].map((key) => found[key]).find((value) => /^https?:\/\/[^/]/i.test(value ?? ''));
+  if (url) site.url = new URL(url).origin;
+  const lang = attrOf(html.match(/<html\b[^>]*>/i)?.[0] ?? '', 'lang');
+  return lang ? { ...site, lang } : site;
+};
+
 export function seoPlugin() {
   let resolved;
   let devServer;
   let buildEntry;
+  const indexHtmlFile = () => path.join(resolved.root, 'index.html');
+  const indexHtmlModule = () => `${resolved.root}/${INDEX_HTML_MODULE}`;
+  const isCsr = () =>
+    resolved.command === 'serve'
+      ? !resolved.server.middlewareMode
+      : !resolved.build.ssr && !SERVER_RENDERED_SCRIPT.test(process.env.npm_lifecycle_event || '');
+  // In the browser and on the server alike (the dev server's SSR loader, the build's module runner).
+  const indexHtmlLoader = {
+    name: 'vibex-seo:index-html',
+    async load(id) {
+      if (id.split('?')[0] !== indexHtmlModule() || !isCsr()) return null;
+      const html = await fs.readFile(indexHtmlFile(), 'utf-8').catch(() => '');
+      return `export default ${JSON.stringify(indexHtmlSite(html))};\n`;
+    },
+  };
   const loadEntry = () => {
     if (devServer) return devServer.ssrLoadModule(ENTRY);
     buildEntry ??= runnerImport(ENTRY, {
       root: resolved.root,
       resolve: { alias: resolved.resolve.alias },
-      plugins: [{ name: 'vibex-seo:dompurify', ...dompurifyFallback }],
+      plugins: [{ name: 'vibex-seo:dompurify', ...dompurifyFallback }, indexHtmlLoader],
       logLevel: 'error',
     }).then((result) => result.module);
     return buildEntry;
@@ -157,6 +226,9 @@ export function seoPlugin() {
       resolved = config;
     },
     ...dompurifyFallback,
+    async load(id) {
+      return dompurifyFallback.load(id) ?? indexHtmlLoader.load(id);
+    },
     transform(code, id, options) {
       const file = id.split('?')[0];
       if (id.includes('/node_modules/') || !SCRIPT.test(file)) return null;
@@ -180,6 +252,13 @@ export function seoPlugin() {
       const configFile = path.resolve(resolved.root, 'src/seo.config.js');
       server.watcher.on('change', (file) => {
         if (path.resolve(file) === configFile) server.ws.send({ type: 'full-reload' });
+        if (path.resolve(file) !== indexHtmlFile() || !isCsr()) return;
+        // Vite reloads the page for index.html by itself; what was built from it is built anew,
+        // in the browser and on the server (both re-run an invalidated module and its importers).
+        for (const environment of Object.values(server.environments)) {
+          const mod = environment.moduleGraph.getModuleById(indexHtmlModule());
+          if (mod) environment.moduleGraph.invalidateModule(mod);
+        }
       });
       server.middlewares.use(async (req, res, next) => {
         if (req.url !== '/robots.txt' && req.url !== '/sitemap.xml') return next();

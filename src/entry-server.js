@@ -22,6 +22,7 @@ import {
   asLanguage,
   defaultLanguage,
   languageRedirect,
+  routeDefault,
   routeLanguageOf,
   routeLanguages,
   routeLanguageTarget,
@@ -156,5 +157,7 @@ export const renderStaticSitemap = ({ fallbackUrl } = {}) => {
 };
 // index.html in the SPA build: served for every route, so site-wide tags only (no canonical) —
 // in the default language on a multi-language site.
-export const renderIndexHead = () => renderHead({}, siteIn(site, defaultLanguage), siteUrlOf(''), undefined);
-export const siteLang = () => siteIn(site, defaultLanguage).lang || 'en';
+// The default language, in whichever form the config declares it.
+const indexLanguage = () => defaultLanguage || routeDefault;
+export const renderIndexHead = () => renderHead({}, siteIn(site, indexLanguage()), siteUrlOf(''), undefined);
+export const siteLang = () => siteIn(site, indexLanguage()).lang || 'en';
