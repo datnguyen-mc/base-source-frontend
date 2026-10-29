@@ -14,7 +14,8 @@ export default {
   // languages: ['en', 'kr'],
 
   site: {
-    name: 'VibeX APP',
+    // Left empty, index.html keeps its own tags; a value here replaces them in every build mode.
+    name: '',
     // Public origin, e.g. 'https://myapp.com'. The SITE_URL env var overrides it.
     url: '',
     lang: 'en', // 'vi-VN' style (or ko, ja, vi, th, id) also sets og:locale; a page's own `lang` wins; with `languages`, unused
@@ -24,7 +25,7 @@ export default {
     // default language's (/products/3 → /ko/products/3), and a first segment that is none of them
     // 404 (/xx/products). Pages without one (/login, /admin) stay as they are. Empty: one language.
     langs: [],
-    description: 'VibeX APP',
+    description: '',
     keywords: '',
     image: '', // default social share image (1200×630)
     favicon: '',

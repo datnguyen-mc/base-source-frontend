@@ -27,7 +27,11 @@ export const describe = (value, fallback = '') => {
 export const pageTitle = (title, site) => {
   const name = site.name || '';
   if (!title || title === name) return name;
-  return name ? `${title} | ${name}` : String(title);
+  const text = String(title);
+  if (!name) return text;
+  // A title that already has the site name at either end, next to the separator, is kept as is.
+  const carriesName = text.startsWith(`${name} |`) || text.endsWith(`| ${name}`);
+  return carriesName ? text : `${text} | ${name}`;
 };
 export const resolveSiteUrl = (site, fallback = '') =>
   String((typeof process !== 'undefined' && process.env?.SITE_URL) || site.url || fallback).replace(/\/+$/, '');
@@ -111,7 +115,7 @@ export function renderHead(page, site, siteUrl, path) {
   const modified = article && isoDate(page.updatedAt);
   const imageAlt = image && page.imageAlt;
   const lines = [
-    `<title data-seo="" data-seo-path="${escapeHtml(path || '')}">${escapeHtml(title)}</title>`,
+    title && `<title data-seo="" data-seo-path="${escapeHtml(path || '')}">${escapeHtml(title)}</title>`,
     description && seoTag('meta', { name: 'description', content: description }),
     keywords && seoTag('meta', { name: 'keywords', content: keywords }),
     page.author && seoTag('meta', { name: 'author', content: page.author }),
@@ -123,9 +127,9 @@ export function renderHead(page, site, siteUrl, path) {
     site.favicon && seoTag('link', { rel: 'icon', href: site.favicon }),
     site.appleTouchIcon && seoTag('link', { rel: 'apple-touch-icon', href: site.appleTouchIcon }),
     site.themeColor && seoTag('meta', { name: 'theme-color', content: site.themeColor }),
-    seoTag('meta', { property: 'og:site_name', content: site.name }),
+    site.name && seoTag('meta', { property: 'og:site_name', content: site.name }),
     seoTag('meta', { property: 'og:type', content: ogType }),
-    seoTag('meta', { property: 'og:title', content: title }),
+    title && seoTag('meta', { property: 'og:title', content: title }),
     description && seoTag('meta', { property: 'og:description', content: description }),
     image && seoTag('meta', { property: 'og:image', content: image }),
     imageAlt && seoTag('meta', { property: 'og:image:alt', content: imageAlt }),
@@ -138,7 +142,7 @@ export function renderHead(page, site, siteUrl, path) {
     article && page.section && seoTag('meta', { property: 'article:section', content: page.section }),
     seoTag('meta', { name: 'twitter:card', content: image ? 'summary_large_image' : 'summary' }),
     site.twitterSite && seoTag('meta', { name: 'twitter:site', content: site.twitterSite }),
-    seoTag('meta', { name: 'twitter:title', content: title }),
+    title && seoTag('meta', { name: 'twitter:title', content: title }),
     description && seoTag('meta', { name: 'twitter:description', content: description }),
     image && seoTag('meta', { name: 'twitter:image', content: image }),
     imageAlt && seoTag('meta', { name: 'twitter:image:alt', content: imageAlt }),
