@@ -26,7 +26,7 @@ export { config };
 // for a value the config gives per language ({ en: '…', kr: '…' }), which index.html cannot.
 const fromIndexHtml = Object.entries(indexHtmlSite || {}).filter(([key]) => {
   const own = config.site?.[key];
-  return !(own && typeof own === 'object');
+  return !own;
 });
 export const site = { ...(config.site || {}), ...Object.fromEntries(fromIndexHtml) };
 export const siteUrlOf = (fallback) => resolveSiteUrl(site, fallback);
