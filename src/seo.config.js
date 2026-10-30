@@ -5,6 +5,7 @@
  *
  * site
  *   name         empty → index.html keeps its own tags; a value here replaces them in every build mode
+ *                and follows every page title: 'Contact | myapp'
  *   url          'https://myapp.com'. The SITE_URL env var overrides it
  *   lang         'vi-VN' style (or ko, ja, vi, th, id) also sets og:locale; a page's own `lang` wins
  *   langs        languages an app carries in its own routes (':lang/products/:id'), e.g. ['ko', 'en'],
@@ -13,7 +14,9 @@
  *   image        default social share image (1200×630)
  *   twitterSite  '@myapp'
  *   searchUrl    '/search?q={search_term_string}' — the search box in Google results
- * Every value here is ONE language, the default one — per-language text belongs in
+ *   locales      { en: { name, description }, ko: { … } } — per language, over the values above;
+ *                an empty value keeps them
+ * Every other value here is ONE language, the default one — per-language page text belongs in
  * src/seo.routes.js, one entry per language.
  *
  * languages: ['en', 'kr'] — the other way round: one URL prefix per language (/en/…, /kr/…), each
@@ -42,6 +45,7 @@ export default {
     themeColor: '',
     twitterSite: '',
     searchUrl: '',
+    locales: {},
   },
   strict: false,
   robots: { disallow: ['/admin'] },

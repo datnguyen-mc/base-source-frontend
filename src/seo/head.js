@@ -24,12 +24,17 @@ export const describe = (value, fallback = '') => {
   if (!text) return fallback;
   return text.length > 160 ? `${text.slice(0, 157).trimEnd()}…` : text;
 };
-// The page's title as it is — the site name is not added to it; a page without one shows the site name.
-export const pageTitle = (title, site) => (title ? String(title) : site.name || '');
+// 'Contact' → 'Contact | myapp'; no title, or the name itself → the name.
+export const pageTitle = (title, site) => {
+  const name = site?.name || '';
+  const text = title ? String(title) : '';
+  if (!text || text === name) return name;
+  return name ? `${text} | ${name}` : text;
+};
 export const resolveSiteUrl = (site, fallback = '') =>
   String((typeof process !== 'undefined' && process.env?.SITE_URL) || site.url || fallback).replace(/\/+$/, '');
 const absolute = (value, siteUrl) =>
-  value && siteUrl && value.startsWith('/') && !value.startsWith('//') ? `${siteUrl}${value}` : value;
+  typeof value === 'string' && siteUrl && value.startsWith('/') && !value.startsWith('//') ? `${siteUrl}${value}` : value;
 const isoDate = (value) => {
   const date = value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toISOString() : undefined;
@@ -38,7 +43,8 @@ const isoDate = (value) => {
 // single obvious one ('ko' → 'ko_KR'); others ('en') are left out.
 const TERRITORY = { ko: 'KR', ja: 'JP', vi: 'VN', th: 'TH', id: 'ID' };
 const ogLocale = (lang) => {
-  if (/^[a-z]{2,3}[-_][a-z]{2}$/i.test(lang || '')) return lang.replace('-', '_');
+  if (typeof lang !== 'string') return '';
+  if (/^[a-z]{2,3}[-_][a-z]{2}$/i.test(lang)) return lang.replace('-', '_');
   return TERRITORY[lang] ? `${lang}_${TERRITORY[lang]}` : '';
 };
 const tag = (name, attrs) =>
@@ -60,11 +66,12 @@ const structuredData = (page, site, siteUrl, path) => {
   // site.home: the home page of the page's language on a multi-language site ('/kr').
   const home = site.home || '/';
   return [
-    // The site name (and search box, with site.searchUrl) Google shows for the site.
+    // The site name and description (and search box, with site.searchUrl) Google shows for the site.
     path === home && siteUrl && site.name && {
       '@context': SCHEMA,
       '@type': 'WebSite',
       name: site.name,
+      ...(site.description && { description: describe(site.description) }),
       url: home === '/' ? `${siteUrl}/` : `${siteUrl}${home}`,
       ...(site.searchUrl && {
         potentialAction: {
@@ -178,10 +185,10 @@ export const headTagKey = keyOf;
 export const withLang = (template, lang) =>
   lang
     ? template.replace(/<html\b[^>]*>/i, (open) =>
-        /\slang\s*=\s*["'][^"']*["']/i.test(open)
-          ? open.replace(/\slang\s*=\s*["'][^"']*["']/i, ` lang="${escapeHtml(lang)}"`)
-          : open.replace(/^<html/i, `<html lang="${escapeHtml(lang)}"`),
-      )
+      /\slang\s*=\s*["'][^"']*["']/i.test(open)
+        ? open.replace(/\slang\s*=\s*["'][^"']*["']/i, ` lang="${escapeHtml(lang)}"`)
+        : open.replace(/^<html/i, `<html lang="${escapeHtml(lang)}"`),
+    )
     : template;
 /**
  * index.html with the page's head tags, crawlable HTML (`html`, inserted into #root) and
