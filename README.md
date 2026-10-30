@@ -318,7 +318,7 @@ site: {
 | `/ko/contact` | `문의 \| 마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. |
 | `/ko` | `마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. |
 
-The name in `WebSite` JSON-LD on the home page follows too.
+The name and description in `WebSite` JSON-LD on the home page follow too.
 
 ---
 

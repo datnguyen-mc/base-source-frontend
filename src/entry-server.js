@@ -86,8 +86,10 @@ async function renderPage(url, { fallbackUrl, onHead } = {}) {
     const target = routeLanguageTarget(normalizePath(pathname), patternOf);
     if (target) return { status: 301, redirect: target + search, mode: 'redirect' };
     if (target === null) {
-      const head = renderHead(notFoundPage, site, siteUrl, normalizePath(pathname));
-      return { status: 404, head, html: '', lang: site.lang, mode: 'client', timings: {} };
+      // No language to go by: the default one's name and description (`site.locales`).
+      const defaultSite = siteIn(site, routeDefault);
+      const head = renderHead(notFoundPage, defaultSite, siteUrl, normalizePath(pathname));
+      return { status: 404, head, html: '', lang: defaultSite.lang, mode: 'client', timings: {} };
     }
   }
   const started = performance.now();
