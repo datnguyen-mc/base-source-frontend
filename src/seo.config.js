@@ -7,7 +7,8 @@
  *   name         empty → index.html keeps its own tags; a value here replaces them in every build mode
  *                and follows every page title: 'Contact | myapp'
  *   url          'https://myapp.com'. The SITE_URL env var overrides it
- *   lang         'vi-VN' style (or ko, ja, vi, th, id) also sets og:locale; a page's own `lang` wins
+ *   lang         'vi-VN', or a bare 'vi'; also sets og:locale ('vi' → vi_VN, 'hi' → hi_IN); a page's
+ *                own `lang` wins
  *   langs        languages an app carries in its own routes (':lang/products/:id'), e.g. ['ko', 'en'],
  *                `lang` being the default. A URL without one 301s to it, an unknown first segment
  *                404s, and pages without a language (/login, /admin) stay as they are

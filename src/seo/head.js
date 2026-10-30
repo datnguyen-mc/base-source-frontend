@@ -39,13 +39,19 @@ const isoDate = (value) => {
   const date = value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toISOString() : undefined;
 };
-// og:locale wants language_TERRITORY ('vi_VN'). A bare language gets one only where there is a
-// single obvious one ('ko' → 'ko_KR'); others ('en') are left out.
-const TERRITORY = { ko: 'KR', ja: 'JP', vi: 'VN', th: 'TH', id: 'ID' };
+// og:locale wants language_TERRITORY ('vi_VN'): a tag that names its country keeps it ('en-GB' →
+// 'en_GB'), a bare language gets the one it is most used in (CLDR, through Intl.Locale: 'en' →
+// 'en_US', 'hi' → 'hi_IN', 'zh-Hant' → 'zh_TW'). x-default, an unknown language and a region that
+// is no country ('es-419') get none.
 const ogLocale = (lang) => {
   if (typeof lang !== 'string') return '';
-  if (/^[a-z]{2,3}[-_][a-z]{2}$/i.test(lang)) return lang.replace('-', '_');
-  return TERRITORY[lang] ? `${lang}_${TERRITORY[lang]}` : '';
+  try {
+    const { language, region } = new Intl.Locale(lang.replace(/_/g, '-')).maximize();
+    return /^[A-Z]{2}$/.test(region) && region !== 'ZZ' ? `${language}_${region}` : '';
+  } catch {
+    // Not a language tag ('x-default'), or an engine without Intl.Locale.
+    return '';
+  }
 };
 const tag = (name, attrs) =>
   `<${name} ${Object.entries(attrs)

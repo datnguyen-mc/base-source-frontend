@@ -266,7 +266,7 @@ site: { lang: 'ko', langs: ['ko', 'en'], … }      // lang: the default
 
 | Request | SSR answers |
 |---|---|
-| `/en/products/3` | the page, `<html lang="en">`, `og:locale` of `en` (none for a bare `en`; `en-US` → `en_US`) |
+| `/en/products/3` | the page, `<html lang="en">`, `og:locale` of `en` (`en_US`; `en-GB` → `en_GB`) |
 | `/` | **301** → `/ko` |
 | `/products/3`, `/products` (old URLs, before the app had languages) | **301** → `/ko/products/3`, `/ko/products` |
 | `/xx/products` (no language of the site) | **404**, `noindex` |
