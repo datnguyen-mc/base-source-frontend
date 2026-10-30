@@ -1,0 +1,12 @@
+/*
+ * Bundled into the app's stylesheet (vite-plugins/loading-plugin.js links it): once that has
+ * arrived, the page shows, and the spinner from src/loading.css stays only while #root is empty —
+ * a page rendered in the browser, until React has rendered it.
+ */
+:where(#root > *) {
+  animation: none;
+}
+
+#root:not(:empty)::before {
+  content: none;
+}

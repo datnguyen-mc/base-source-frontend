@@ -5,8 +5,12 @@ import { babelTransformPlugin } from './vite-plugins/babel-transform-plugin.js';
 import { visualEditPlugin } from './vite-plugins/visual-edit-plugin.js';
 import { errorOverlayPlugin } from './vite-plugins/error-overlay-plugin.js'
 import { postMessageInject } from "./vite-plugins/postmessage-inject.js";
+import { seoPlugin } from "./vite-plugins/seo-plugin.js";
+import { loadingPlugin } from "./vite-plugins/loading-plugin.js";
+import { precompressPlugin } from "./vite-plugins/precompress-plugin.js";
+import { serverBundlePlugin } from "./vite-plugins/server-bundle-plugin.js";
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const isProduction = env.VITE_APP_ENV === 'production';
 
@@ -16,6 +20,10 @@ export default defineConfig(({ mode }) => {
     cacheDir: process.env.VITE_CACHE_DIR || undefined,
     plugins: [
       react(),
+      seoPlugin(),
+      loadingPlugin(),
+      precompressPlugin(),
+      serverBundlePlugin(),
       ...(!isProduction
         ? [
           babelTransformPlugin(),
@@ -38,8 +46,11 @@ export default defineConfig(({ mode }) => {
     ].filter(Boolean),
     build: {
       sourcemap: false,
+      // The SSR bundle (build:ssr / build:ssg) is server code — public/ belongs to the client build only.
+      copyPublicDir: !isSsrBuild,
     },
     server: {
+      host: "0.0.0.0",
       port: 5173,
       allowedHosts: true,
       hmr: {

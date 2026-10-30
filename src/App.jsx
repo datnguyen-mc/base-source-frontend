@@ -1,5 +1,5 @@
 import "./App.css";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
@@ -8,10 +8,10 @@ import NavigationTracker from "@/lib/NavigationTracker";
 import { pagesConfig } from "./pages.config";
 import {
   createBrowserRouter,
+  Outlet,
   RouterProvider,
-  Route,
-  Routes,
   ScrollRestoration,
+  useHref,
   useNavigationType,
   useLocation,
 } from "react-router-dom";
@@ -25,6 +25,9 @@ import ErrorBoundary from "@/components/ui/error-boundary";
 import RouterErrorBoundary from "@/components/ui/router-error-boundary";
 import DefaultHome from "./pages/Home";
 import PoweredByBadge from "@/components/PoweredByBadge";
+import { syncDocumentHead } from "@/seo/client";
+import { browserBasename } from "@/seo/i18n";
+import { markHydrated, pageLoader, serverRendered } from "@/seo/ssr";
 
 const { Pages, Layout, mainPage, Admins, adminMainPage, AdminLayout } = pagesConfig;
 
@@ -60,6 +63,27 @@ function ScrollBehavior() {
   return null;
 }
 
+/**
+ * Title + meta description follow src/seo.routes.js — on navigation, and on the first load
+ * when the head was not server-rendered for this page (SPA build).
+ */
+function DocumentHeadSync() {
+  const location = useLocation();
+  // The URL as the browser shows it: with the language prefix (the router's basename), if any.
+  const href = useHref({ pathname: location.pathname, search: location.search });
+  const firstRender = useRef(true);
+  // The title as the page starts rendering, before its own effects run: one it sets itself
+  // (document.title = …) is kept (src/seo/client.js).
+  const titleBefore = useMemo(() => (typeof document === "undefined" ? undefined : document.title), [href]);
+
+  useEffect(() => {
+    syncDocumentHead(href, { initial: firstRender.current, titleBefore });
+    firstRender.current = false;
+  }, [href, titleBefore]);
+
+  return null;
+}
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin, ipBlocked } =
     useAuth();
@@ -74,7 +98,8 @@ const AuthenticatedApp = () => {
     return <IpAccessRestricted />;
   }
 
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  // A server-rendered page shows its content right away; the auth check finishes in the background.
+  if ((isLoadingPublicSettings || isLoadingAuth) && !serverRendered) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
@@ -95,31 +120,7 @@ const AuthenticatedApp = () => {
     }
   }
 
-  return (
-    <Routes>
-      {/* User layout */}
-      <Route element={<LayoutWrapper currentPageName={mainPageKey} />}>
-        <Route index element={<MainPage />} />
-        {Object.entries(Pages).map(([path, Page]) => (
-          <Route key={path} path={path} element={<Page />} />
-        ))}
-      </Route>
-
-      {/* LOGIN ROUTE - NO LAYOUT (Standalone) */}
-      <Route path="/admin/login" element={<Login />} />
-
-      {/* Admin layout */}
-      <Route path="admin" element={<AdminLayoutWrapper currentPageName={adminMainPageKey} />}>
-        <Route index element={<AdminMainPage />} />
-        {Object.entries(Admins).map(([path, Page]) => (
-          <Route key={`admin-${path}`} path={path} element={<Page />} />
-        ))}
-      </Route>
-
-      {/* 404 */}
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
-  );
+  return <Outlet />;
 };
 
 function RootShell() {
@@ -129,6 +130,7 @@ function RootShell() {
       <ScrollRestoration getKey={(location) => location.pathname + location.search} />
       {/* Force top on PUSH/REPLACE */}
       <ScrollBehavior />
+      <DocumentHeadSync />
 
       <NavigationTracker />
       <AuthenticatedApp />
@@ -136,26 +138,78 @@ function RootShell() {
   );
 }
 
-const router = createBrowserRouter([
+// One route table for the browser router and the SSR static handler (src/seo/render-app.jsx).
+// A page (or a layout) can load its data on the server for SSR through a static property, read in
+// it with useLoaderData(). It runs for the server-rendered response only: in the browser it is null,
+// so navigation never waits on the network and the page fetches in useEffect as before:
+//   PostDetail.loader = pageLoader(async ({ params }) => ({ post: await Post.get(params.id) }));
+// Every loader is wrapped in pageLoader here, so one that throws or hangs can never turn a page
+// into an error screen: it resolves to null and the page loads its data in the browser.
+const withLoader = (Component) => (Component?.loader ? pageLoader(Component.loader) : undefined);
+const page = (Page) => ({ element: <Page />, loader: withLoader(Page) });
+
+export const routes = [
   {
-    path: "*",
     element: <RootShell />,
     errorElement: <RouterErrorBoundary />,
+    children: [
+      // User layout
+      {
+        element: <LayoutWrapper currentPageName={mainPageKey} />,
+        loader: withLoader(Layout),
+        children: [
+          { index: true, ...page(MainPage) },
+          ...Object.entries(Pages).map(([path, Page]) => ({ path, ...page(Page) })),
+        ],
+      },
+      // LOGIN ROUTE - NO LAYOUT (Standalone)
+      { path: "/admin/login", element: <Login /> },
+      // Admin layout
+      {
+        path: "admin",
+        element: <AdminLayoutWrapper currentPageName={adminMainPageKey} />,
+        loader: withLoader(AdminLayout),
+        children: [
+          { index: true, ...page(AdminMainPage) },
+          ...Object.entries(Admins).map(([path, Page]) => ({ path, ...page(Page) })),
+        ],
+      },
+      // 404
+      { path: "*", element: <PageNotFound /> },
+    ],
   },
-]);
+];
 
-function App() {
+/** Everything around the router — shared by the browser app and the SSR render. */
+export function AppProviders({ children, queryClient = queryClientInstance }) {
+  // Runs after every child mounted: from here on useBrowserState reads the browser right away.
+  useEffect(() => markHydrated(), []);
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <QueryClientProvider client={queryClientInstance}>
-          <RouterProvider router={router} />
+        <QueryClientProvider client={queryClient}>
+          {children}
           <Toaster />
           <VisualEditAgent />
           <PoweredByBadge />
         </QueryClientProvider>
       </AuthProvider>
     </ErrorBoundary>
+  );
+}
+
+// Created on first render, not at import: the server imports this module too. A server-rendered
+// page's loader data (window.__staticRouterHydrationData) is picked up automatically. On a
+// multi-language site (src/seo.config.js `languages`) the app is served under the URL's language
+// prefix: /kr/shop is the page "shop", and <Link to="/cart"> goes to /kr/cart.
+let browserRouter;
+
+function App() {
+  browserRouter ??= createBrowserRouter(routes, { basename: browserBasename() });
+  return (
+    <AppProviders>
+      <RouterProvider router={browserRouter} />
+    </AppProviders>
   );
 }
 

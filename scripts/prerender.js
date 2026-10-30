@@ -1,0 +1,103 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// SSG step of `npm run build:ssg`: renders every indexable path from src/seo.config.js into
+// static HTML inside dist/, next to the normal SPA build, plus sitemap.xml and robots.txt.
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const distDir = path.join(root, 'dist');
+const ssrDir = path.join(root, 'dist-ssr');
+const CONCURRENCY = 8;
+// An effect a page render ran (src/seo/server-effects.js) that reaches for `window` after an
+// `await` rejects with nobody to catch it: expected — the browser runs it again — not a failure.
+const inServerEffect = () => Boolean(globalThis[Symbol.for('vibex.ssr.effects')]?.current());
+process.on('unhandledRejection', (reason) => {
+  if (inServerEffect()) return;
+  console.error('[ssg] unhandled promise rejection:', reason);
+  process.exitCode = 1;
+});
+process.on('uncaughtException', (err) => {
+  if (inServerEffect()) return;
+  console.error(err);
+  process.exit(1);
+});
+
+// dist/<path>/index.html for a clean URL path; null when the path has a query, or would land
+// outside dist/ (paths often come from data, e.g. a slug containing "../").
+const fileFor = (urlPath) => {
+  if (!urlPath.startsWith('/') || /[?#\\]/.test(urlPath)) return null;
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath);
+  } catch {
+    return null;
+  }
+  if (/[\\\0]/.test(decoded) || decoded.split('/').some((segment) => segment === '..' || segment === '.')) return null;
+  const file = path.resolve(distDir, `.${decoded}`, 'index.html');
+  return file.startsWith(distDir + path.sep) ? file : null;
+};
+
+const template = await fs.readFile(path.join(distDir, 'index.html'), 'utf-8');
+// No server runs during the build: a page's `fetch('/data.json')` reads dist/ (src/seo/server-effects.js).
+globalThis[Symbol.for('vibex.ssr.staticDir')] = distDir;
+const entry = await import(pathToFileURL(path.join(ssrDir, 'entry-server.js')).href);
+const siteUrl = entry.siteUrlOf('');
+if (!siteUrl) {
+  console.warn('[ssg] site.url (src/seo.config.js) / SITE_URL is not set — no canonical URLs, no sitemap.xml.');
+}
+
+try {
+  // The SPA page with site defaults, for host rewrites of paths that were not prerendered.
+  await fs.writeFile(path.join(distDir, 'spa.html'), template);
+  const paths = await entry.listPaths();
+  const written = new Set();
+  const failed = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < paths.length) {
+      const urlPath = paths[next++];
+      const file = fileFor(urlPath);
+      if (!file) {
+        console.warn(`[ssg] skipped ${urlPath} — not a plain path inside dist/`);
+        continue;
+      }
+      try {
+        const page = await entry.render(urlPath);
+        if (page.status !== 200) {
+          console.warn(`[ssg] skipped ${urlPath} — status ${page.status}`);
+          continue;
+        }
+        const html = entry.injectPage(template, page);
+        await fs.mkdir(path.dirname(file), { recursive: true });
+        await fs.writeFile(file, html);
+        written.add(urlPath);
+        console.log(`[ssg] ${urlPath} → ${path.relative(root, file)}`);
+      } catch (err) {
+        failed.push(urlPath);
+        console.error(`[ssg] ${urlPath} failed:`, err?.message || err);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+  // A robots.txt / sitemap.xml the app ships in public/ (e.g. uploaded) is already in dist/ — the
+  // client build copied it — and stays as it is; only a missing one is generated.
+  const shipped = (name) => fs.stat(path.join(root, 'public', name)).then((s) => s.isFile(), () => false);
+  const ownRobots = await shipped('robots.txt');
+  const ownSitemap = await shipped('sitemap.xml');
+  if (!ownRobots) await fs.writeFile(path.join(distDir, 'robots.txt'), entry.renderRobots());
+  if (siteUrl && !ownSitemap) {
+    // In the order listPaths() gave, not the order the workers finished in.
+    const ordered = paths.filter((p) => written.has(p));
+    await fs.writeFile(path.join(distDir, 'sitemap.xml'), await entry.renderSitemap({ paths: ordered }));
+  }
+  const kept = [ownRobots && 'robots.txt', ownSitemap && 'sitemap.xml'].filter(Boolean);
+  const sitemapNote = !ownSitemap && siteUrl ? ' with sitemap.xml' : '';
+  console.log(`[ssg] ${written.size} page(s) written to dist/${sitemapNote}${kept.length ? ` (public/ ${kept.join(', ')} kept)` : ''}`);
+  if (failed.length) {
+    console.error(`[ssg] ${failed.length} page(s) failed: ${failed.join(', ')}`);
+    process.exitCode = 1;
+  }
+} finally {
+  await fs.rm(ssrDir, { recursive: true, force: true });
+}
