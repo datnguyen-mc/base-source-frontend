@@ -109,7 +109,7 @@ VITE_APP_ENV=production npm run build:ssr && PORT=5173 npm run start:ssr
 
 | File | Controls |
 |---|---|
-| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `languages` (multi-language, below), `robots.txt`, `sitemap.xml`, `strict` 404s |
+| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `locales` (name / description per language, below), `languages` (multi-language, below), `robots.txt`, `sitemap.xml`, `strict` 404s |
 | `src/seo.routes.js` | **Every page, one file**: title, description, image, `type` (og:type), `content`, `items`, `breadcrumbs`, `canonical`, `noindex`, `imageAlt`, `author`, `alternates` (hreflang), extra `meta` / `links`, `jsonLd`, `load()` for data, `paths()` for dynamic URLs — field list in the file header |
 
 Structured data (JSON-LD) comes with it: `WebSite` on the home page (with a search box when
@@ -119,7 +119,7 @@ Structured data (JSON-LD) comes with it: `WebSite` on the home page (with a sear
 ```js
 // src/seo.routes.js
 export default [
-  { path: '/', title: 'Home' },
+  { path: '/', title: 'Home' },                   // <title>Home | My Shop</title> — site.name is added
   {
     path: '/products/:id',
     type: 'product',
@@ -280,6 +280,45 @@ crawlers a host redirect `/` → `/ko`.
 
 Without any list, a route's `:lang` param alone still gives its page `<html lang>` and
 `og:locale` (`/kr/…` → `ko`), for any language — nothing is redirected then.
+
+### Page title and site name per language (`site.locales`)
+
+Every page's `<title>` is its route's title followed by the site name: `title: 'Contact'` →
+`Contact | My Shop`. A page without a title shows the name alone, and a title that already starts
+or ends with it next to a separator (`My Shop — Phones`, `Contact | My Shop`) is kept as is — so
+route titles never carry the name themselves.
+
+On a multi-language site (`site.langs` or `languages`), `site.locales` gives the name and
+description in each language, keyed like that list (`kr`, not `ko`, with `languages: ['en', 'kr']`).
+A missing or empty value keeps `site`'s.
+
+```js
+// src/seo.config.js
+site: {
+  name: 'My Shop',
+  description: 'Phones and accessories, shipped worldwide.',
+  lang: 'en',
+  langs: ['en', 'ko'],
+  locales: {
+    en: { name: 'My Shop', description: 'Phones and accessories, shipped worldwide.' },
+    ko: { name: '마이샵', description: '휴대폰과 액세서리, 전 세계 배송.' },
+  },
+  …
+},
+
+// src/seo.routes.js — titles without the name, one entry per language
+{ path: '/en/contact', title: 'Contact' },
+{ path: '/ko/contact', title: '문의' },
+{ path: '/ko' },
+```
+
+| Page | `<title>` | `og:site_name` | description (route without its own) |
+|---|---|---|---|
+| `/en/contact` | `Contact \| My Shop` | `My Shop` | Phones and accessories, shipped worldwide. |
+| `/ko/contact` | `문의 \| 마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. |
+| `/ko` | `마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. |
+
+The name and description in `WebSite` JSON-LD on the home page follow too.
 
 ---
 

@@ -15,6 +15,7 @@
  *   lang ('ko' | 'en-US'), else the URL's: its first segment with `site.langs`, else a `:lang` param,
  *   meta [{ property, content }], links [{ rel, href }], jsonLd {…}, article: { publishedAt, updatedAt, section }
  * An empty title / description falls back to `site`; /admin is the one route kept out of search.
+ * Every title gets the site name after it ('Contact' → 'Contact | myapp'), so leave it out.
  *
  * Relative image / breadcrumb / alternate URLs are made absolute with the site URL. With
  * `languages`, write every path WITHOUT the prefix — it is added per page, and any value can be
