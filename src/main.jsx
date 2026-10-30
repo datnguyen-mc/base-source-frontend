@@ -1,3 +1,5 @@
+// First: answers the server's responses again while the page hydrates (src/seo/fetch-hook.js).
+import '@/seo/fetch-hook';
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
@@ -5,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import '@/index.css'
 import { setupIframeMessaging, markHmrQuiet } from '@/lib/iframe-messaging';
 import { setupGoogleTranslateGuard } from '@/lib/google-translate-guard';
+import { undoEmailObfuscation } from '@/seo/cloudflare';
 
 // Patch DOM methods before React renders (must run before render)
 setupGoogleTranslateGuard();
@@ -12,10 +15,19 @@ setupGoogleTranslateGuard();
 // Install global error → postMessage handlers (must run before render)
 setupIframeMessaging();
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <App />
-)
-
+// A server-rendered page (SSR / SSG) is hydrated; otherwise the SPA renders from scratch.
+const container = document.getElementById('root');
+if (window.__staticRouterHydrationData) {
+  // Behind Cloudflare, email addresses in the HTML are not the ones the server rendered.
+  undoEmailObfuscation(container);
+  ReactDOM.hydrateRoot(container, <App />, {
+    // A mismatch (e.g. a widget that renders differently in the browser) is repaired by React
+    // re-rendering on the client — a warning, not a crash for the error reporters to flag.
+    onRecoverableError: (error) => console.warn('[ssr] hydration mismatch, re-rendered in the browser:', error),
+  });
+} else {
+  ReactDOM.createRoot(container).render(<App />);
+}
 if (import.meta.hot) {
   import.meta.hot.on('vite:beforeUpdate', () => {
     // Open the quiet window FIRST so transient errors during the swap/re-render

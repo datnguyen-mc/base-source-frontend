@@ -1,6 +1,15 @@
 // =============================================================
 // vibexClient SDK
 // ================== helpers ==================
+// Language of a page from its URL: the first path segment when it is a language code —
+function langFromUrl(url) {
+  try {
+    const segment = new URL(url, "http://localhost").pathname.split("/")[1] || "";
+    return /^[a-z]{2}(?:-[a-z]{2,4})?$/i.test(segment) ? segment.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
 function ensureBase(url) {
   return url.endsWith("/") ? url : url + "/";
 }
@@ -148,7 +157,9 @@ function createHttp(cfg) {
   const getRequestLang = () => {
     if (typeof window === "undefined") return undefined;
     try {
+      // The page's language from its URL first (/ko/san-pham/… → "ko"), then the defaults.
       const lang =
+        langFromUrl(window.location.href) ||
         localStorage.getItem("i18nextLng") ||
         window.navigator?.languages?.[0] ||
         window.navigator?.language ||
