@@ -15,8 +15,9 @@
  *   image        default social share image (1200×630)
  *   twitterSite  '@myapp'
  *   searchUrl    '/search?q={search_term_string}' — the search box in Google results
- *   locales      { en: { name, description }, ko: { … } } — per language, over the values above;
- *                an empty value keeps them
+ *   locales      { en: { name, description, keywords, image }, ko: { … } } — per language, over the
+ *                values above; an empty value keeps them. The page's language picks one: its URL's
+ *                (`langs`, `languages`), else its own `lang` / route `:lang`, else `lang` above
  * Every other value here is ONE language, the default one — per-language page text belongs in
  * src/seo.routes.js, one entry per language.
  *

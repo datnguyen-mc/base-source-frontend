@@ -109,7 +109,7 @@ VITE_APP_ENV=production npm run build:ssr && PORT=5173 npm run start:ssr
 
 | File | Controls |
 |---|---|
-| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `locales` (name / description per language, below), `languages` (multi-language, below), `robots.txt`, `sitemap.xml`, `strict` 404s |
+| `src/seo.config.js` | Site defaults for `index.html` (name, description, image, icons, `lang`, public URL, search URL), `locales` (name / description / keywords / image per language, below), `languages` (multi-language, below), `robots.txt`, `sitemap.xml`, `strict` 404s |
 | `src/seo.routes.js` | **Every page, one file**: title, description, image, `type` (og:type), `content`, `items`, `breadcrumbs`, `canonical`, `noindex`, `imageAlt`, `author`, `alternates` (hreflang), extra `meta` / `links`, `jsonLd`, `load()` for data, `paths()` for dynamic URLs — field list in the file header |
 
 Structured data (JSON-LD) comes with it: `WebSite` on the home page (with a search box when
@@ -278,30 +278,39 @@ and `:lang`). `lang` in a route's meta wins over the URL's. Canonical is the pag
 hreflang comes from the route's `alternates`. With `build:ssg`, `/` is the SPA page — give
 crawlers a host redirect `/` → `/ko`.
 
-Without any list, a route's `:lang` param alone still gives its page `<html lang>` and
-`og:locale` (`/kr/…` → `ko`), for any language — nothing is redirected then.
+Without any list, a route's `:lang` param alone still gives its page `<html lang>`, `og:locale`
+and `site.locales` entry (`/kr/…` → `ko`), for any language — nothing is redirected then.
 
-### Page title and site name per language (`site.locales`)
+### Title, description and share image per language (`site.locales`)
 
 Every page's `<title>` is its route's title followed by the site name: `title: 'Contact'` →
 `Contact | My Shop`. A page without a title shows the name alone, and a title that already starts
 or ends with it next to a separator (`My Shop — Phones`, `Contact | My Shop`) is kept as is — so
 route titles never carry the name themselves.
 
-On a multi-language site (`site.langs` or `languages`), `site.locales` gives the name and
-description in each language, keyed like that list (`kr`, not `ko`, with `languages: ['en', 'kr']`).
-A missing or empty value keeps `site`'s.
+`site.locales` gives the name, description, keywords and share image (`image`: og:image,
+twitter:image) in each language, keyed by the language (`ko`, `ja`) or as in `languages` (`kr`).
+The page's language picks the entry: its URL's with `site.langs` or `languages`; without either
+list, the page's own `lang` or its route's `:lang`, else `site.lang`. A missing or empty value
+keeps `site`'s.
 
 ```js
 // src/seo.config.js
 site: {
   name: 'My Shop',
   description: 'Phones and accessories, shipped worldwide.',
+  keywords: 'phones, accessories',
+  image: '/og.png',
   lang: 'en',
   langs: ['en', 'ko'],
   locales: {
     en: { name: 'My Shop', description: 'Phones and accessories, shipped worldwide.' },
-    ko: { name: '마이샵', description: '휴대폰과 액세서리, 전 세계 배송.' },
+    ko: {
+      name: '마이샵',
+      description: '휴대폰과 액세서리, 전 세계 배송.',
+      keywords: '휴대폰, 액세서리',
+      image: '/og-ko.png',
+    },
   },
   …
 },
@@ -312,13 +321,44 @@ site: {
 { path: '/ko' },
 ```
 
-| Page | `<title>` | `og:site_name` | description (route without its own) |
-|---|---|---|---|
-| `/en/contact` | `Contact \| My Shop` | `My Shop` | Phones and accessories, shipped worldwide. |
-| `/ko/contact` | `문의 \| 마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. |
-| `/ko` | `마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. |
+| Page | `<title>` | `og:site_name` | description | keywords | `og:image` |
+|---|---|---|---|---|---|
+| `/en/contact` | `Contact \| My Shop` | `My Shop` | Phones and accessories, shipped worldwide. | phones, accessories | `/og.png` |
+| `/ko/contact` | `문의 \| 마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. | 휴대폰, 액세서리 | `/og-ko.png` |
+| `/ko` | `마이샵` | `마이샵` | 휴대폰과 액세서리, 전 세계 배송. | 휴대폰, 액세서리 | `/og-ko.png` |
 
 The name and description in `WebSite` JSON-LD on the home page follow too.
+
+**Where each tag comes from** — the first one set, in the page's language:
+
+| Tags | 1. the route (`src/seo.routes.js`) | 2. `site.locales[lang]` | 3. `site` |
+|---|---|---|---|
+| `<title>`, `og:title`, `twitter:title` | `title`, followed by the name | `name` | `name` |
+| `description`, `og:description`, `twitter:description` | `description` (else `content`) | `description` | `description` |
+| `keywords` | `keywords` | `keywords` | `keywords` |
+| `og:image`, `twitter:image` | `image` | `image` | `image` |
+
+**A route's value in one language wins in every language.** `description: 'Organic cotton tees.'`
+or `image: '/hero.png'` on `/:lang` shows that same text and image on `/ko` and `/ja` too. Leave
+it out (or `''`) to get `site.locales`, or give it per language — keyed as in `site.langs` /
+`languages`, a language left out getting the default's:
+
+```js
+// src/seo.routes.js
+{
+  path: '/:lang',
+  title: { en: 'Organic tees', ko: '오가닉 티셔츠', ja: 'オーガニックTシャツ' },
+  description: { en: 'Three organic cotton tees.', ko: '오가닉 코튼 티셔츠 3종.', ja: 'オーガニックコットンTシャツ3型。' },
+  image: { en: '/og-en.png', ko: '/og-ko.png', ja: '/og-ja.png' },
+}
+```
+
+**Switching language.** The head follows the URL: a switcher that goes to the page in another
+language (`hrefIn()` of `useLanguage()`, or `<Link to="/ja/…">` with `site.langs`) shows that
+language's title, description, keywords and image — server-rendered on a page load, rendered in
+the browser on a client-side navigation. One that only changes React state or `localStorage`,
+the URL staying the same, leaves the head in the URL's language — and search engines only ever
+see that one.
 
 ---
 
