@@ -18,8 +18,10 @@
  * Every title gets the site name after it ('Contact' → 'Contact | myapp'), so leave it out.
  *
  * Relative image / breadcrumb / alternate URLs are made absolute with the site URL. With
- * `languages`, write every path WITHOUT the prefix — it is added per page, and any value can be
- * given per language: title: { en: 'Shop', kr: '쇼핑' }.
+ * `languages`, write every path WITHOUT the prefix — it is added per page. With `languages` or
+ * `site.langs`, any value can be given per language: title: { en: 'Shop', kr: '쇼핑' }. A value in
+ * ONE language (description: 'Organic tees') shows in every language: leave description / image /
+ * keywords empty to get the language's `site.locales` entry, or give them per language.
  *
  * Entities return plain rows and need no try/catch — a backend that cannot answer makes the
  * server reply 503 by itself:
