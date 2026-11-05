@@ -33,6 +33,49 @@ export const pagePattern = (pathname) => {
 // Time the effects of one page get to load their data (ms), and render passes at most.
 const EFFECTS_TIMEOUT = Number(process.env.SSR_EFFECTS_TIMEOUT ?? 3000);
 const MAX_PASSES = 8;
+// Renders, and time (ms), spent at most per page finding the states a pass breaks on (see
+// pinCulprit) — only a page that breaks spends any.
+const MAX_PROBES = 32;
+const MAX_PROBE_MS = 1000;
+// The same error: its message and the frame it was thrown from (whatever was thrown: null, a string…).
+const sameError = (err) => {
+  try {
+    return `${typeof err}\n${err?.message ?? String(err)}\n${String(err?.stack).split('\n').find((line) => /^\s*at /.test(line))}`;
+  } catch {
+    return 'unreadable';
+  }
+};
+
+// The server log says once, per place in the code, what a page could not render.
+const reported = new Set();
+const warnOnce = (key, message) => {
+  if (reported.has(key)) return;
+  if (reported.size > 200) reported.clear();
+  reported.add(key);
+  console.warn(message);
+};
+// The app's file a stack points to first — no line: it would be the compiled module's, not the source's.
+const inSrc = (text) => (String(text || '').match(/\/src\/[^\s):]+/) || [''])[0].slice(1);
+const thrown = (err) => {
+  try {
+    return `"${err?.message || String(err)}"${inSrc(err?.stack) ? ` (in ${inSrc(err.stack)})` : ''}`;
+  } catch {
+    return 'an error';
+  }
+};
+// `at NotifyHost (/app/src/components/NotifyHost.jsx:37:31)` → `NotifyHost (src/components/NotifyHost.jsx)`
+const stateName = (entry) => {
+  const component = String(entry.site).match(/^at\s+([\w$.]+)\s+\(/)?.[1];
+  const file = inSrc(entry.site);
+  return [component, file && `(${file})`].filter(Boolean).join(' ') || 'a component';
+};
+// A value as short as the log needs it: false, "draft", [3 items], {…}.
+const preview = (value) => {
+  if (Array.isArray(value)) return `[${value.length} item${value.length === 1 ? '' : 's'}]`;
+  if (value && typeof value === 'object') return '{…}';
+  const text = typeof value === 'string' ? JSON.stringify(value) : String(value);
+  return text.length > 24 ? `${text.slice(0, 23)}…` : text;
+};
 
 // Errors are not JSON: tag them the way the browser router expects to read them back.
 const serializeErrors = (errors) =>
@@ -91,26 +134,122 @@ export async function renderApp(href) {
   );
   let page = null;
   let renderMs = 0;
-  let passes = 0; // passes rendered so far
+  let passes = 0; // passes rendered so far — rendered again once a state is pinned, still the one
+  let probes = 0;
+  let probeMs = 0;
+  let failure = null; // what the last pass that broke threw
+  // The server-effects.js that comes with this file can pin a state; an older one (the two files
+  // not updated together) cannot: a pass that breaks then keeps the last one that rendered, as before.
+  const canPin = ['passed', 'suspects', 'revert', 'pin'].every((name) => typeof run[name] === 'function');
   // false when the pass threw: a later pass breaking (e.g. content that reads `window` once its
   // data is in) keeps the last one that rendered. The first one failing is the page failing.
   const renderPass = (final) => {
-    passes = run.beginPass(final);
+    run.beginPass(final);
     const passStarted = performance.now();
     try {
       page = { html: renderToString(app), state: run.snapshot() };
+      if (canPin) run.passed();
       return true;
     } catch (err) {
       if (!page) throw err;
+      failure = err;
       return false;
     } finally {
       renderMs += performance.now() - passStarted;
     }
   };
+  const probesLeft = () => probes < MAX_PROBES && probeMs < MAX_PROBE_MS;
+  // The page rendered with `entries` back at the value they last rendered with, no effect run:
+  // → { err } with what it threw (even `throw null`), null when it rendered. Nothing is kept from it.
+  const tryWithout = (entries) => {
+    probes += 1;
+    const restore = run.revert(entries);
+    run.beginPass(true);
+    const probeStarted = performance.now();
+    try {
+      renderToString(app);
+      return null;
+    } catch (err) {
+      return { err };
+    } finally {
+      restore();
+      const spent = performance.now() - probeStarted;
+      probeMs += spent;
+      renderMs += spent;
+    }
+  };
+  // A pass threw once the data was in — typically a "mounted" flag an effect set, which now renders
+  // a portal or reads `document`. Rather than losing every state changed since the last pass that
+  // rendered, find the one behind that error and pin it (server-effects.js): the browser sets it.
+  // The changed states are tried newest first — a component's own flag before the page data it is
+  // rendered from (setting the data back would make the error go away too, with the content): the
+  // shortest run of them that, set back, makes that error go away (a binary search) ends with it.
+  // The error is the one the page throws with its states as they are now: the pass that broke ran
+  // effects too, which may have changed some since. → { err, pinned: [{ name, change, count }] } —
+  // pinned is empty when the page renders as it is now (the pass is just rendered again); null when
+  // there is nothing to pin: the error comes from no changed state, or the probes ran out.
+  const pinCulprit = () => {
+    if (!probesLeft()) return null;
+    const now = tryWithout([]);
+    if (!now) return { err: null, pinned: [] };
+    const { err } = now;
+    const gone = (entries) => {
+      const left = tryWithout(entries);
+      return !left || sameError(left.err) !== sameError(err);
+    };
+    const suspects = run.suspects().reverse();
+    if (!suspects.length || !probesLeft() || !gone(suspects)) return null;
+    let lo = 1; // setting back the first lo - 1 suspects leaves the error…
+    let hi = suspects.length; // …setting back the first hi makes it go away
+    while (lo < hi && probesLeft()) {
+      const mid = (lo + hi) >> 1;
+      if (gone(suspects.slice(0, mid))) hi = mid;
+      else lo = mid + 1;
+    }
+    const found = suspects.slice(lo - 1, hi); // one, unless the probes ran out
+    // The same state of the component's other instances (a list of cards…), changed the same way.
+    const sameState = (a, b) => a === b || (a.site === b.site && Object.is(a.good, b.good) && Object.is(a.value, b.value));
+    const pinned = found.map((entry) => ({
+      name: stateName(entry),
+      change: `${preview(entry.good)} → ${preview(entry.value)}`,
+      count: suspects.filter((other) => sameState(entry, other)).length,
+    }));
+    suspects.filter((entry) => found.some((culprit) => sameState(culprit, entry))).forEach(run.pin);
+    return { err, pinned };
+  };
+  const path = new URL(href).pathname;
+  // Finding the state never costs the page: should anything go wrong there, the last pass that
+  // rendered is sent, as before.
+  const recover = () => {
+    if (!canPin) return null;
+    try {
+      return pinCulprit();
+    } catch (err) {
+      warnOnce(`recover ${sameError(err)}`, `[ssr] ${path}: finding the state a render pass broke on threw ${thrown(err)} — the last pass that rendered is sent.`);
+      return null;
+    }
+  };
   try {
     for (;;) {
       const final = passes + 1 >= MAX_PASSES || run.expired();
-      if (!renderPass(final) || final) break;
+      passes += 1;
+      let rendered = renderPass(final);
+      // One error at a time: the state behind it is pinned, then the pass rendered again.
+      for (let found; !rendered && (found = recover()); rendered = renderPass(final)) {
+        if (!found.pinned.length) continue;
+        const states = found.pinned
+          .map(({ name, change, count }) => `a state in ${name}${count > 1 ? ` (${count} instances)` : ''} an effect set (${change})`)
+          .join(', ');
+        warnOnce(
+          `${found.pinned.map(({ name }) => name).join()} ${sameError(found.err)}`,
+          `[ssr] ${path}: ${states} throws ${thrown(found.err)} — left to the browser; the rest of the page is server-rendered.`,
+        );
+      }
+      if (!rendered) {
+        warnOnce(`pass ${sameError(failure)}`, `[ssr] ${path}: a render pass threw ${thrown(failure)} once its data was in — the last pass that rendered is sent.`);
+        break;
+      }
+      if (final) break;
       await run.settle();
       if (!run.changed()) break;
     }
