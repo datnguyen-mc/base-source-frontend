@@ -315,7 +315,10 @@ export function createEffectsRun({ timeout, href }) {
     let entry = slots.get(key);
     if (!entry) {
       const value = initial();
-      entry = { id, value, initial: value };
+      // site: the line that called the hook — names the state in the server log (see pin).
+      // good: the value it is known to render with — the last pass that rendered had (see passed);
+      // its initial one until then, for a component that first renders in a pass that breaks.
+      entry = { id, site, value, initial: value, good: value };
       make(entry);
       slots.set(key, entry);
     }
@@ -323,8 +326,9 @@ export function createEffectsRun({ timeout, href }) {
     entry.pass = pass;
     return entry;
   };
+  // A pinned state (see pin) keeps the value the page renders with: its updates wait for the browser.
   const update = (entry, next) => {
-    if (!run.closed) entry.value = next;
+    if (!run.closed && !entry.pinned) entry.value = next;
   };
 
   const context = {
@@ -407,6 +411,32 @@ export function createEffectsRun({ timeout, href }) {
     },
     /** True when a state the last pass rendered has changed since. */
     changed: () => [...slots.values()].some((entry) => entry.pass === pass && !Object.is(entry.value, entry.rendered)),
+    /** After a pass that rendered: the values it rendered its states with are known to render. */
+    passed() {
+      for (const entry of slots.values()) {
+        if (entry.pass === pass) entry.good = entry.rendered;
+      }
+    },
+    /**
+     * The states changed since the last pass that rendered, in the order the page first rendered
+     * them: when the next pass throws, it breaks on one of them (src/seo/render-app.jsx).
+     */
+    suspects: () => [...slots.values()].filter((entry) => !entry.pinned && !Object.is(entry.value, entry.good)),
+    /** Sets `entries` back to the value they last rendered with; the function returned undoes it. */
+    revert(entries) {
+      const now = entries.map((entry) => entry.value);
+      entries.forEach((entry) => (entry.value = entry.good));
+      return () => entries.forEach((entry, i) => (entry.value = now[i]));
+    },
+    /**
+     * A state the page cannot be rendered with on the server — a "mounted" flag an effect set, that
+     * now renders a portal or reads `document`… — keeps the value it last rendered with, for the
+     * rest of the render and for hydration: the browser sets it, as it would without SSR.
+     */
+    pin(entry) {
+      entry.value = entry.good;
+      entry.pinned = true;
+    },
     /**
      * The states the last pass rendered, for hydration (src/seo/hooks.js): `data` — set by an
      * effect; `initial` — still their initial value, which the browser may compute differently
