@@ -461,6 +461,16 @@ import { ClientOnly } from '@/seo/ssr';
 <ClientOnly fallback={<div className="h-64" />}><MapContainer … /></ClientOnly>
 ```
 
+The "wait until mounted" pattern works too, although the server runs the effect that sets the
+flag: when a state an effect set makes the page throw (`useEffect(() => setMounted(true), [])`,
+then `createPortal(…, document.body)`), the server finds that state, renders it as it was before
+the effect — the browser sets it, as without SSR — and keeps everything else the effects loaded.
+The server log names it once:
+
+```
+[ssr] /reels: a state in NotifyHost (src/components/NotifyHost.jsx) an effect set (false → true) throws "document is not defined" (in src/components/NotifyHost.jsx) — left to the browser; the rest of the page is server-rendered.
+```
+
 Well-known browser-only packages (leaflet, react-leaflet, quill, react-quill, html2canvas, jspdf,
 ffmpeg, html5-qrcode, mapbox, apexcharts, lottie, konva…) are replaced by an inert stand-in in the
 server build, so importing them at the top of a file is safe. Any other library that touches
@@ -506,7 +516,9 @@ a server-rendered page: it renders as a signed-out visitor sees it, then updates
 | An effect writes (create, update, like…) | Held back on the server; done by the browser |
 | An effect's request is slow (over `SSR_EFFECTS_TIMEOUT`) | The page is sent with what has arrived; the rest loads in the browser |
 | An effect keeps changing state | At most 8 render passes; each effect re-runs at most 3 times |
-| A pass breaks once the data is in | The last pass that rendered is sent |
+| A state an effect set breaks the page (a `mounted` flag that now renders a portal or reads `document`, data a component cannot render…) | That state alone is rendered as it was before the effect, and set by the browser; the rest of the data is in the HTML. Logged once, naming the component |
+| A pass still breaks once the data is in (the error comes from no state, the search runs out of its 32 renders / 1 s, or fails itself) | The last pass that rendered is sent (logged once) |
+| `src/seo/render-app.jsx` updated without `src/seo/server-effects.js` (or the other way round) | Pages render as they did before this safety net; nothing breaks. Update both together to get it |
 | A motion element starts hidden (`initial={{ opacity: 0 }}`, `initial="hidden"`) | Rendered at its final state on the server and while hydrating; animates after navigation |
 | A page shows an email address and the site is behind Cloudflare (Email Obfuscation) | Cloudflare rewrites it in the HTML; `src/seo/cloudflare.js` puts it back before hydrating, so the page hydrates as rendered |
 | Server and browser markup differ | React re-renders in the browser; logged as a warning, not a crash |
