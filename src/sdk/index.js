@@ -372,6 +372,9 @@ function createEntities(http) {
                       method: "GET",
                       query: clean({
                         page: args[0]?.page,
+                        // The server pages by `limit` (max 100); `pageSize` is
+                        // the SDK's name for it and is still sent as-is.
+                        limit: args[0]?.limit ?? args[0]?.pageSize,
                         pageSize: args[0]?.pageSize,
                         filter: args[0]?.filter ? JSON.stringify(args[0].filter) : undefined,
                         sort: args[0]?.sort ? JSON.stringify(args[0].sort) : undefined,
@@ -389,12 +392,20 @@ function createEntities(http) {
                       }
                     );
 
+                  // create(data, { async: true }) → queued write (mode=async):
+                  // resolves { queued: true, writeIds } once accepted, before
+                  // the row is stored. The server writes directly when it
+                  // cannot queue, so the result may still be the record.
                   case "create": {
                     const data = args[0];
+                    const query = clean({
+                      mode: args[1]?.async ? "async" : undefined,
+                    });
                     if (isFormDataLike(data)) {
                       return http.request(`${entity}`, {
                         method: "POST",
                         body: data,
+                        query,
                       });
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
@@ -402,12 +413,14 @@ function createEntities(http) {
                       return http.request(`${entity}/create`, {
                         method: "POST",
                         body: fd,
+                        query,
                       });
                     }
                     return http.request(`${entity}/create`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
+                      query,
                     });
                   }
 
@@ -536,13 +549,67 @@ function createEntities(http) {
                     return arr.length ? arr[0] : null;
                   }
 
+                  // Many rows by id in as few calls as possible — the cure for
+                  // "N+1" (a list of posts, then each author fetched on its own).
+                  // One `list` call per 100 distinct ids instead of one per row.
+                  // Usage: const authors = await entities.User.findByIds(posts.map((p) => p.authorId))
+                  //        const byId = new Map(authors.map((u) => [String(u.id), u]))
+                  // Same for any field (a natural key or a foreign key, where one
+                  // value may match many rows — those are paged through):
+                  //        const stock = await entities.Stock.findByFieldIn("productId", productIds)
+                  // `opts`: `filter` (extra conditions, ANDed), `fields`, `populate`.
+                  case "findByIds":
+                  case "findByFieldIn": {
+                    const byId = method === "findByIds";
+                    const field = byId ? "id" : args[0];
+                    const values = byId ? args[0] : args[1];
+                    const opts = (byId ? args[1] : args[2]) || {};
+                    const keys = [
+                      ...new Set(
+                        (Array.isArray(values) ? values : []).filter(
+                          (v) => v !== undefined && v !== null && v !== ""
+                        )
+                      ),
+                    ];
+                    const PAGE = 100; // the server's max rows per `list` call
+                    const rows = [];
+                    for (let i = 0; i < keys.length; i += PAGE) {
+                      const filter = JSON.stringify({
+                        ...(opts.filter || {}),
+                        [field]: { $in: keys.slice(i, i + PAGE) },
+                      });
+                      // Sequential on purpose: each app has a per-second request budget.
+                      for (let page = 1; page <= 50; page++) {
+                        const res = await http.request(`${entity}/list`, {
+                          method: "GET",
+                          query: clean({
+                            filter,
+                            limit: PAGE,
+                            page,
+                            fields: arrToCsv(opts.fields),
+                            populate: opts.populate === false ? undefined : 1,
+                          }),
+                        });
+                        const arr = Array.isArray(res) ? res : (res?.data ?? []);
+                        rows.push(...arr);
+                        // ids are unique: a chunk never holds more rows than keys.
+                        if (byId || arr.length < PAGE) break;
+                      }
+                    }
+                    return rows;
+                  }
+
                   // ---- Bulk ops (each row/id is policy-enforced server-side) ----
                   // entities.Product.createMany([{...}, {...}])
+                  // createMany(items, { async: true }) → queued, as create().
                   case "createMany":
                     return http.request(`${entity}/createMany`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ items: args[0] || [] }),
+                      query: clean({
+                        mode: args[1]?.async ? "async" : undefined,
+                      }),
                     });
 
                   // Create-or-update by id: items WITH an existing id → update,
