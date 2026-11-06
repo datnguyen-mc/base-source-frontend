@@ -89,10 +89,12 @@ export async function resolvePage(href, base = DEFAULT_BASE) {
   // The URL's language — its prefix, or the route language it starts with — else the default.
   const lang = urlLang || defaultLanguage || routeLanguageOf(path) || routeDefault;
   const pageSite = siteIn(site, lang);
-  // The page's own language (its `lang`, or the URL's) wins: <html lang>, og:locale.
+  // The page's own language (its `lang`, or the URL's) wins: <html lang>, og:locale — and, without
+  // a language list, its `site.locales` entry (name, description, image…).
   const siteFor = (page, params) => {
     const own = ownLanguage(page, params, path);
-    return own ? { ...pageSite, lang: own } : pageSite;
+    if (!own) return pageSite;
+    return { ...(defaultLanguage || routeDefault ? pageSite : siteIn(site, own)), lang: own };
   };
   const match = matchRoute(routePath);
   if (!match) {
