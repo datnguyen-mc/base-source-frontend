@@ -93,7 +93,13 @@ const release = () => {
   held = null;
   queue?.forEach((apply) => apply());
 };
-const hold = (apply) => (held ? held.push(apply) : apply());
+// Returns nothing, as React's own setter does: an effect written `useEffect(() => setX(v), deps)`
+// hands its return value to React as the cleanup, and a number there (the queue's length) ends in
+// "destroy is not a function" when the component unmounts or the effect runs again.
+const hold = (apply) => {
+  if (held) held.push(apply);
+  else apply();
+};
 if (held) {
   // In case the page never reports hydrated (src/App.jsx calls markHydrated): end it all anyway.
   setTimeout(() => {

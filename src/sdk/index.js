@@ -392,20 +392,12 @@ function createEntities(http) {
                       }
                     );
 
-                  // create(data, { async: true }) → queued write (mode=async):
-                  // resolves { queued: true, writeIds } once accepted, before
-                  // the row is stored. The server writes directly when it
-                  // cannot queue, so the result may still be the record.
                   case "create": {
                     const data = args[0];
-                    const query = clean({
-                      mode: args[1]?.async ? "async" : undefined,
-                    });
                     if (isFormDataLike(data)) {
                       return http.request(`${entity}`, {
                         method: "POST",
                         body: data,
-                        query,
                       });
                     }
                     if (isFileLike(data) || hasFileLikeDeep(data)) {
@@ -413,14 +405,12 @@ function createEntities(http) {
                       return http.request(`${entity}/create`, {
                         method: "POST",
                         body: fd,
-                        query,
                       });
                     }
                     return http.request(`${entity}/create`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
-                      query,
                     });
                   }
 
@@ -601,15 +591,11 @@ function createEntities(http) {
 
                   // ---- Bulk ops (each row/id is policy-enforced server-side) ----
                   // entities.Product.createMany([{...}, {...}])
-                  // createMany(items, { async: true }) → queued, as create().
                   case "createMany":
                     return http.request(`${entity}/createMany`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ items: args[0] || [] }),
-                      query: clean({
-                        mode: args[1]?.async ? "async" : undefined,
-                      }),
                     });
 
                   // Create-or-update by id: items WITH an existing id → update,

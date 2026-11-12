@@ -27,6 +27,11 @@ function handlePageHide() {
 function extractPathWithLine(stack) {
   if (!stack) return null;
 
+  // The first frame in the app's own code, wherever it sits in the stack: an error thrown
+  // from React's internals (an effect's cleanup, a render) starts with node_modules frames.
+  const own = stack.match(/https?:\/\/[^\s)]*?\/(src\/[^\s):?]+)(?:\?[^\s):]*)?:(\d+):\d+/);
+  if (own) return `${own[1]}:${own[2]}`;
+
   const match = stack.match(/https?:\/\/[^\s)]+:(\d+):\d+/);
   if (!match) return null;
 
@@ -35,6 +40,9 @@ function extractPathWithLine(stack) {
 
   let path = full.replace(/^https?:\/\/[^/]+\//, "");
   path = path.split("?")[0]; // remove ?t=timestamp
+
+  // A frame inside a dependency names nothing the app can fix.
+  if (path.startsWith("node_modules/")) return null;
 
   return `${path}:${line}`; // final format
 }
