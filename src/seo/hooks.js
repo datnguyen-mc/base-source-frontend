@@ -93,7 +93,10 @@ const release = () => {
   held = null;
   queue?.forEach((apply) => apply());
 };
-const hold = (apply) => (held ? held.push(apply) : apply());
+const hold = (apply) => {
+  if (held) held.push(apply);
+  else apply();
+};
 if (held) {
   // In case the page never reports hydrated (src/App.jsx calls markHydrated): end it all anyway.
   setTimeout(() => {
