@@ -883,7 +883,7 @@ function createAuth(http, cfg) {
                       email: email,
                       password: sub,
                       name: name || email.split("@")[0],
-                      avatar: picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+                      avatar: picture || "",
                       metadata: {
                         googleSub: sub,
                         provider: "google",

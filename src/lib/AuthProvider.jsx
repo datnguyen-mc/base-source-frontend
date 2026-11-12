@@ -83,13 +83,17 @@ export const AuthProvider = ({ children }) => {
             try {
                 const token = localStorage.getItem("access_token");
                 if (!token) {
-                    const currentPath = location.pathname.toLowerCase();
+                    const currentPath = window.location.pathname.toLowerCase();
                     const isPrivate = Object.keys({})
                         .map((k) => `/${k.toLowerCase()}`)
                         .some((p) => currentPath.startsWith(p));
 
+                    // AuthProvider wraps <RouterProvider> (see AppProviders in
+                    // App.jsx), so useNavigate() is not available here — it
+                    // throws outside a router. Redirect through the browser.
                     if (isPrivate) {
-                        navigate("/", { replace: true });
+                        window.location.replace("/");
+                        return;
                     }
 
                     setIsAuthenticated(false);
