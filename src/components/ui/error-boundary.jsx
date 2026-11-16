@@ -29,15 +29,21 @@ class ErrorBoundary extends React.Component {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
 
-    // Report to parent iframe
+    // Report to parent iframe. The component stack starts at the component whose render or
+    // effect threw; its first frame in the app's own code (the `?t=` cache-buster dropped)
+    // names the file to fix, where the error's own stack would only show React's internals.
+    const componentStack = errorInfo?.componentStack?.toString() || '';
+    const ownFrame = componentStack.match(
+      /https?:\/\/[^\s)]*?\/(src\/[^\s):?]+)(?:\?[^\s):]*)?:(\d+):\d+/,
+    );
     try {
       window.parent?.postMessage(
         {
           type: 'app_error',
           error: {
             title: errStr,
-            details: errorInfo?.componentStack?.toString(),
-            componentName: null,
+            details: componentStack,
+            componentName: ownFrame ? `${ownFrame[1]}:${ownFrame[2]}` : null,
           },
         },
         '*',
