@@ -1,5 +1,6 @@
 
 import { isIframe } from "./coreUtils.js";
+import { srcFrames, withFrames } from "./error-frames.js";
 
 export function setupIframeMessaging() {
   if (isIframe) {
@@ -29,8 +30,8 @@ function extractPathWithLine(stack) {
 
   // The first frame in the app's own code, wherever it sits in the stack: an error thrown
   // from React's internals (an effect's cleanup, a render) starts with node_modules frames.
-  const own = stack.match(/https?:\/\/[^\s)]*?\/(src\/[^\s):?]+)(?:\?[^\s):]*)?:(\d+):\d+/);
-  if (own) return `${own[1]}:${own[2]}`;
+  const [own] = srcFrames(stack, 1);
+  if (own) return own.at;
 
   const match = stack.match(/https?:\/\/[^\s)]+:(\d+):\d+/);
   if (!match) return null;
@@ -287,9 +288,10 @@ function handleUnhandledRejection(event) {
     ? `Error in ${functionName}: ${reasonText}`
     : reasonText;
 
+  // The app's frames under the message: the studio's auto-fix loads every file they name.
   onAppError({
     title: msg,
-    details: reasonText,
+    details: withFrames(reasonText, srcFrames(stack)),
     componentName: functionName,
     originalError: event.reason,
   });
@@ -313,7 +315,7 @@ function handleWindowError(event) {
 
   onAppError({
     title: msg,
-    details: errorText,
+    details: withFrames(errorText, srcFrames(stack)),
     componentName: functionName,
     originalError: event.error,
   });

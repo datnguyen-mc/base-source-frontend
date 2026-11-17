@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useRouteError, isRouteErrorResponse } from 'react-router-dom';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { srcFrames, withFrames } from '@/lib/error-frames';
 
 const TRANSLATIONS = {
   ko: {
@@ -31,16 +32,18 @@ function extractErrorInfo(error) {
     return { title, details: String(details), componentName: null, stack: '' };
   }
 
+  // The app's own frames name the file to fix: a render error's stack starts at the component
+  // that threw. Title, details and component match what src/lib/iframe-messaging.js sends for
+  // the same error, so the studio keeps a single entry for the two reports.
   const stack = error?.stack || '';
-  const match = stack.match(/at\s+(\w+)\s+\(eval/);
-  let componentName = match?.[1] ?? null;
-  if (componentName === 'eval') componentName = null;
+  const frames = srcFrames(stack);
+  const evalName = stack.match(/at\s+(\w+)\s+\(eval/)?.[1];
+  const componentName = frames[0]?.at ?? (evalName && evalName !== 'eval' ? evalName : null);
 
-  const title = componentName
-    ? `in ${componentName}: ${error}`
-    : String(error);
+  const text = String(error);
+  const title = componentName ? `in ${componentName}: ${text}` : text;
 
-  return { title, details: String(error), componentName, stack };
+  return { title, details: withFrames(text, frames), componentName, stack };
 }
 
 /**
