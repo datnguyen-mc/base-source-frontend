@@ -219,10 +219,36 @@ export function postMessageInject() {
                 };
 
                 // =============== UTIL ===============
-                function extractPathWithLine(stack) {
-                  if (!stack) return null;
-                  const match = stack.match(/\\/src\\/[^\\s):]+:(\\d+)/);
-                  return match ? match[0] : null;
+                // The app's own frames (/src/…) in a stack, top first, as
+                // { at: "src/components/Nav.jsx:43", name: "Nav" }. The studio's
+                // auto-fix loads every src/… path it finds in a report as a whole
+                // file; dependency frames name nothing the app can fix, and Vite's
+                // ?t= cache-buster is dropped so a frame reads the same on every
+                // reload. Same rules as src/lib/error-frames.js, which this inline
+                // script cannot import.
+                function srcFrames(stack) {
+                  var frames = [];
+                  var lines = String(stack || "").split("\\n");
+                  for (var i = 0; i < lines.length && frames.length < 5; i++) {
+                    var line = lines[i];
+                    if (line.indexOf("/node_modules/") !== -1) continue;
+                    var loc = line.match(/https?:\\/\\/[^\\s)]*?\\/(src\\/[^\\s):?#]+)[^\\s):]*:(\\d+):\\d+/);
+                    if (!loc) continue;
+                    var at = loc[1] + ":" + loc[2];
+                    if (frames.some(function (f) { return f.at === at; })) continue;
+                    var fn = (line.match(/\\bat\\s+(?:async\\s+|new\\s+)?([^\\s(]+)\\s+\\(/) ||
+                      line.match(/^\\s*([^@\\s]+)@/) || [])[1] || "";
+                    frames.push({ at: at, name: fn });
+                  }
+                  return frames;
+                }
+
+                // text, then one "    at Name (src/…:line)" line per frame.
+                function withFrames(text, frames) {
+                  if (!frames.length) return text;
+                  return [text].concat(frames.map(function (f) {
+                    return "    at " + (f.name ? f.name + " (" + f.at + ")" : f.at);
+                  })).join("\\n");
                 }
 
                 // Turn ANY thrown/rejected value into readable text. toString()
@@ -325,33 +351,28 @@ export function postMessageInject() {
                   onAppError(payload);
                 }
 
+                // Title, details and component match what src/lib/iframe-messaging.js
+                // sends for the same error, so the studio keeps one entry for both.
                 window.addEventListener("error", function (e) {
-                  const stack = e?.error?.stack;
-                  const shortPath = extractPathWithLine(stack);
-
-                  const title = shortPath
-                    ? \`Error in \${shortPath}:\`
-                    : e.message;
+                  const frames = srcFrames(e?.error?.stack);
+                  const shortPath = frames.length ? frames[0].at : null;
+                  const text = toReadableText(e.error) || toReadableText(e.message);
 
                   onRuntimeError({
-                    title,
-                    details: toReadableText(e.error) || toReadableText(e.message),
+                    title: shortPath ? \`in \${shortPath}: \${text}\` : text,
+                    details: withFrames(text, frames),
                     componentName: shortPath,
                   });
                 }, true);
 
                 window.addEventListener("unhandledrejection", function (e) {
-                  const stack = e.reason?.stack;
-                  const shortPath = extractPathWithLine(stack);
-
+                  const frames = srcFrames(e.reason?.stack);
+                  const shortPath = frames.length ? frames[0].at : null;
                   const reasonText = toReadableText(e.reason);
-                  const title = shortPath
-                    ? \`Unhandled Error in \${shortPath}\`
-                    : reasonText;
 
                   onRuntimeError({
-                    title,
-                    details: reasonText,
+                    title: shortPath ? \`Error in \${shortPath}: \${reasonText}\` : reasonText,
+                    details: withFrames(reasonText, frames),
                     componentName: shortPath,
                   });
                 });
