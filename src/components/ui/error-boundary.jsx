@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { srcFrames, withFrames } from '@/lib/error-frames';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -29,21 +30,24 @@ class ErrorBoundary extends React.Component {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
 
-    // Report to parent iframe. The component stack starts at the component whose render or
-    // effect threw; its first frame in the app's own code (the `?t=` cache-buster dropped)
-    // names the file to fix, where the error's own stack would only show React's internals.
+    // Report to parent iframe. The error's own stack names the line that threw; the component
+    // stack adds the components above it, and is all there is when React itself threw (an
+    // effect's cleanup), whose stack shows only React's internals. The first frame in the app's
+    // own code names the file to fix; title, details and component match what
+    // src/lib/iframe-messaging.js sends for the same error, so the studio keeps one entry.
     const componentStack = errorInfo?.componentStack?.toString() || '';
-    const ownFrame = componentStack.match(
-      /https?:\/\/[^\s)]*?\/(src\/[^\s):?]+)(?:\?[^\s):]*)?:(\d+):\d+/,
-    );
+    const frames = [...srcFrames(error?.stack), ...srcFrames(componentStack)]
+      .filter((f, i, all) => all.findIndex((g) => g.at === f.at) === i)
+      .slice(0, 8);
+    const where = frames[0]?.at ?? null;
     try {
       window.parent?.postMessage(
         {
           type: 'app_error',
           error: {
-            title: errStr,
-            details: componentStack,
-            componentName: ownFrame ? `${ownFrame[1]}:${ownFrame[2]}` : null,
+            title: where ? `in ${where}: ${errStr}` : errStr,
+            details: withFrames(errStr, frames),
+            componentName: where,
           },
         },
         '*',
