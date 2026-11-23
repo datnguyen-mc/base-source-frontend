@@ -726,7 +726,10 @@ function createAuth(http, cfg) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(args[0] ?? {}),
               });
-              if (res?.data.refresh_token) http.setToken(res.data.refresh_token, true);
+              // The server answers { success, data: { token } } and revokes the
+              // old token after a short grace period, so store the new one now.
+              const data = res?.data?.data || res?.data || res;
+              if (data?.token) http.setToken(data.token, true);
               return res;
             }
 
