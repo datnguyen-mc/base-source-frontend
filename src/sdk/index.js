@@ -1322,7 +1322,7 @@ function createApi(cfg, refreshSession) {
             method: err.method,
             path: err.path,
             requestId: err.requestId,
-            stack: err.details?.stack,
+            stack: err.serverStack || err.details?.stack,
           },
         }),
       );
@@ -1381,6 +1381,8 @@ function createApi(cfg, refreshSession) {
       message: data?.message || res.statusText || `HTTP ${res.status}`,
       details: data?.details ?? null,
       requestId: data?.requestId ?? null,
+      // Outside production the core adds the server stack to a 5xx body.
+      serverStack: typeof data?.stack === 'string' ? data.stack : null,
       method,
       path,
     });
@@ -1410,7 +1412,8 @@ function createApi(cfg, refreshSession) {
       clearSession();
       redirectToLogin({ reloadIfSamePage: false });
     }
-    if (res.status >= 500) report(err);
+    // 5xx, or a route that does not exist (frontend and backend out of step).
+    if (res.status >= 500 || err.code === 'ROUTE_NOT_FOUND') report(err);
     throw err;
   }
 

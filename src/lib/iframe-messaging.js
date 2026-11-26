@@ -285,10 +285,11 @@ function onAppError({ title, details, componentName, originalError }) {
  */
 function handleApiError(event) {
   const d = event?.detail || {};
-  if (!d.status || d.status < 500) return;
+  const missingRoute = d.code === "ROUTE_NOT_FOUND";
+  if (!d.status || (d.status < 500 && !missingRoute)) return;
   const route = `${d.method || "GET"} /api${d.path?.startsWith("/") ? d.path : `/${d.path || ""}`}`;
   onAppError({
-    title: `Backend error ${d.status} on ${route}`,
+    title: missingRoute ? `No backend route for ${route}` : `Backend error ${d.status} on ${route}`,
     details: [
       d.message,
       d.code && `code: ${d.code}`,

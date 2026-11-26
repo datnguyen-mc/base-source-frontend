@@ -53,6 +53,11 @@ export default defineConfig(({ mode, isSsrBuild }) => {
       host: "0.0.0.0",
       port: 5173,
       allowedHosts: true,
+      // Local development of a Fullstack app: `/api` goes to the backend
+      // started with `npm run dev:node` (VIBEX_BACKEND_URL=http://localhost:3000).
+      ...(process.env.VIBEX_BACKEND_URL
+        ? { proxy: { "/api": { target: process.env.VIBEX_BACKEND_URL, changeOrigin: true } } }
+        : {}),
       hmr: {
         overlay: false
       },
