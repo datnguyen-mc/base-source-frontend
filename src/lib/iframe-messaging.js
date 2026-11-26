@@ -7,10 +7,14 @@ export function setupIframeMessaging() {
     window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     window.removeEventListener("error", handleWindowError);
     window.removeEventListener("pagehide", handlePageHide);
+    window.removeEventListener("vibex:api-error", handleApiError);
 
     window.addEventListener("unhandledrejection", handleUnhandledRejection);
     window.addEventListener("error", handleWindowError);
     window.addEventListener("pagehide", handlePageHide);
+    // v2.0 Fullstack apps: a 5xx from the app's own backend (vibex.api) is a
+    // bug in backend code, even when the page catches the error and shows a toast.
+    window.addEventListener("vibex:api-error", handleApiError);
   }
 }
 
@@ -272,6 +276,27 @@ function onAppError({ title, details, componentName, originalError }) {
     },
     "*"
   );
+}
+
+/**
+ * A 5xx answer of the app's backend, announced by the SDK (`vibex.api`). The
+ * studio's auto-fix gets the route, the message, the request id and, in
+ * preview, the server stack naming `backend/...` files.
+ */
+function handleApiError(event) {
+  const d = event?.detail || {};
+  if (!d.status || d.status < 500) return;
+  const route = `${d.method || "GET"} /api${d.path?.startsWith("/") ? d.path : `/${d.path || ""}`}`;
+  onAppError({
+    title: `Backend error ${d.status} on ${route}`,
+    details: [
+      d.message,
+      d.code && `code: ${d.code}`,
+      d.requestId && `requestId: ${d.requestId}`,
+      d.stack,
+    ].filter(Boolean).join("\n"),
+    componentName: "backend",
+  });
 }
 
 function handleUnhandledRejection(event) {

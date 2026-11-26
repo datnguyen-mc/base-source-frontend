@@ -691,11 +691,13 @@ function createAuth(http, cfg) {
             case "register": {
               const res = await http.request("auth/register", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                // Ask for a refresh token (servers without support ignore it).
+                headers: { "Content-Type": "application/json", "x-vibex-refresh": "1" },
                 body: JSON.stringify(args[0] ?? {}),
               });
               const data = res?.data?.data || res?.data || res;
               if (data?.token) localStorage.setItem("access_token", data.token);
+              if (data?.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
               if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
               return res;
             }
@@ -708,11 +710,12 @@ function createAuth(http, cfg) {
 
               const res = await http.request("auth/login", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "x-vibex-refresh": "1" },
                 body: JSON.stringify(payload),
               });
               const data = res?.data?.data || res?.data || res;
               if (data?.token) localStorage.setItem("access_token", data.token);
+              if (data?.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
               if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
               return res;
             }
@@ -721,12 +724,22 @@ function createAuth(http, cfg) {
               return http.request("auth/me", { method: "GET" });
 
             case "refresh": {
+              let stored = null;
+              try {
+                stored = localStorage.getItem("refresh_token");
+              } catch {
+                // storage unavailable
+              }
               const res = await http.request("auth/refresh", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(args[0] ?? {}),
+                headers: { "Content-Type": "application/json", "x-vibex-refresh": "1" },
+                body: JSON.stringify(args[0] ?? (stored ? { refreshToken: stored } : {})),
               });
-              if (res?.data.refresh_token) http.setToken(res.data.refresh_token, true);
+              // { success, data: { token, refreshToken? } }: the old token is retired,
+              // so store the new ones now.
+              const data = res?.data?.data || res?.data || res;
+              if (data?.token) http.setToken(data.token, true);
+              if (data?.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
               return res;
             }
 
@@ -766,9 +779,17 @@ function createAuth(http, cfg) {
               // Best-effort: a network/API error must NOT trap the user in a
               // logged-in state, so we always clear locally afterwards.
               try {
+                let refreshToken = null;
+                try {
+                  refreshToken = localStorage.getItem("refresh_token");
+                } catch {
+                  // storage unavailable
+                }
                 await http.request("auth/logout", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
+                  // The refresh token is revoked too.
+                  body: JSON.stringify(refreshToken ? { refreshToken } : {}),
                 });
               } catch (_) {
                 // ignore — proceed to clear local session regardless
@@ -776,6 +797,7 @@ function createAuth(http, cfg) {
               http.setToken(undefined, true);
               if (typeof window !== "undefined") {
                 localStorage.removeItem("access_token");
+                localStorage.removeItem("refresh_token");
                 localStorage.removeItem("user");
                 window.location.href = "/";
               }
@@ -1211,6 +1233,197 @@ function createRbac(http) {
 // =============================================================
 // Root createClient
 // =============================================================
+// v2.0: renew an expired session with the stored refresh token (single use;
+// the server answers a new pair). false when there is none or it is refused.
+async function refreshAppSession(http) {
+  let refreshToken = null;
+  try {
+    refreshToken = localStorage.getItem('refresh_token');
+  } catch {
+    return false;
+  }
+  if (!refreshToken) return false;
+  const res = await http.request('auth/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-vibex-refresh': '1' },
+    body: JSON.stringify({ refreshToken }),
+  });
+  const data = res?.data?.data || res?.data || res;
+  if (!data?.token) return false;
+  http.setToken(data.token, true);
+  if (data.refreshToken) localStorage.setItem('refresh_token', data.refreshToken);
+  return true;
+}
+
+// ================== app backend (v2.0 Fullstack apps) ==================
+// `vibex.api` calls the app's OWN backend: `/api/...` on the same origin — the
+// backend pod behind the preview host, or the app's Worker once published.
+// Same token and 401 handling as the rest of the SDK. Errors carry the
+// backend's `{ code, message, details, requestId }`; 5xx answers are also
+// announced as a `vibex:api-error` window event (the preview forwards them to
+// auto-fix).
+function createApi(cfg, refreshSession) {
+  const fetchImpl =
+    cfg.fetchImpl ?? (typeof fetch !== 'undefined' ? fetch.bind(globalThis) : null);
+  const base = String(cfg.apiBaseUrl ?? '/api').replace(/\/+$/, '');
+
+  const readToken = () => {
+    try {
+      return localStorage.getItem('access_token') || cfg.token || null;
+    } catch {
+      return cfg.token || null;
+    }
+  };
+  const clearSession = () => {
+    try {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+    } catch {
+      // storage unavailable
+    }
+  };
+
+  function buildUrl(path, query) {
+    const p = String(path ?? '');
+    if (/^[a-z][a-z0-9+.-]*:/i.test(p) || p.startsWith('//')) {
+      throw new Error('vibex.api takes a path such as "/orders", not a URL');
+    }
+    let url = base + (p.startsWith('/') ? p : `/${p}`);
+    if (query && typeof query === 'object') {
+      const qs = new URLSearchParams();
+      for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === null) continue;
+        if (Array.isArray(value)) value.forEach((v) => qs.append(key, String(v)));
+        else qs.append(key, String(value));
+      }
+      const s = qs.toString();
+      if (s) url += (url.includes('?') ? '&' : '?') + s;
+    }
+    return url;
+  }
+
+  function apiError(fields) {
+    const err = new Error(fields.message || 'Request failed');
+    err.name = 'vibexApiError';
+    Object.assign(err, fields);
+    return err;
+  }
+
+  function report(err) {
+    if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+    try {
+      window.dispatchEvent(
+        new CustomEvent('vibex:api-error', {
+          detail: {
+            status: err.status,
+            code: err.code,
+            message: err.message,
+            method: err.method,
+            path: err.path,
+            requestId: err.requestId,
+            stack: err.details?.stack,
+          },
+        }),
+      );
+    } catch {
+      // reporting must never break the call
+    }
+  }
+
+  let refreshing = null;
+
+  async function request(method, path, { body, query, headers, signal, retried = false } = {}) {
+    if (!fetchImpl) throw new Error('fetch is not available');
+    const token = readToken();
+    const h = { Accept: 'application/json', ...(headers || {}) };
+    let payload;
+    if (body !== undefined) {
+      const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+      const isBlob = typeof Blob !== 'undefined' && body instanceof Blob;
+      if (isForm || isBlob) {
+        payload = body;
+      } else {
+        payload = JSON.stringify(body);
+        h['Content-Type'] = 'application/json';
+      }
+    }
+    if (token) h.Authorization = `Bearer ${token}`;
+
+    const url = buildUrl(path, query); // throws on a URL: not a network error
+    let res;
+    try {
+      res = await fetchImpl(url, {
+        method,
+        headers: h,
+        body: payload,
+        signal,
+        credentials: 'same-origin',
+      });
+    } catch (cause) {
+      if (cause?.name === 'AbortError') throw cause;
+      throw apiError({ status: 0, code: 'NETWORK_ERROR', message: 'Could not reach the server', method, path });
+    }
+    if (res.status === 204) return undefined;
+
+    const text = await res.text();
+    let data = text;
+    try {
+      data = text ? JSON.parse(text) : undefined;
+    } catch {
+      // not JSON: keep the text
+    }
+    if (res.ok) return data;
+
+    const err = apiError({
+      status: res.status,
+      code: data?.code ?? null,
+      message: data?.message || res.statusText || `HTTP ${res.status}`,
+      details: data?.details ?? null,
+      requestId: data?.requestId ?? null,
+      method,
+      path,
+    });
+    if (res.status === 401 && token) {
+      // An expired access token is renewed once with the refresh token,
+      // then the call is retried; concurrent calls share one renewal.
+      if (!retried && typeof refreshSession === 'function') {
+        if (!refreshing) {
+          refreshing = Promise.resolve()
+            .then(refreshSession)
+            .catch(() => false)
+            .finally(() => {
+              refreshing = null;
+            });
+        }
+        if (await refreshing) {
+          return request(method, path, { body, query, headers, signal, retried: true });
+        }
+      }
+      // Another tab may have renewed the session meanwhile (a refresh token
+      // works once, so this tab's renewal lost): retry with its token.
+      const current = readToken();
+      if (!retried && current && current !== token) {
+        return request(method, path, { body, query, headers, signal, retried: true });
+      }
+      // The session ended (expired, logged out elsewhere): same as the rest of the SDK.
+      clearSession();
+      redirectToLogin({ reloadIfSamePage: false });
+    }
+    if (res.status >= 500) report(err);
+    throw err;
+  }
+
+  return {
+    request,
+    get: (path, options) => request('GET', path, options),
+    post: (path, body, options) => request('POST', path, { ...options, body }),
+    put: (path, body, options) => request('PUT', path, { ...options, body }),
+    patch: (path, body, options) => request('PATCH', path, { ...options, body }),
+    delete: (path, options) => request('DELETE', path, options),
+  };
+}
+
 export function createClient(config) {
   if (!config?.serverUrl) throw new Error("serverUrl is required");
 
@@ -1239,6 +1452,7 @@ export function createClient(config) {
     integrations: createIntegrations(http),
     functions: createFunctions(httpFunctions),
     rbac: createRbac(httpFunctions),
+    api: createApi(config, () => refreshAppSession(http)),
     auth: createAuth(http, config),
     setToken: (t) => {
       http.setToken(t, true);
