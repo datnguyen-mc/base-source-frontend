@@ -1,4 +1,4 @@
-# VibeX App
+# AladdinX App
 
 Base source frontend built with **React 18** + **Vite 6** + **TailwindCSS 3**.
 
