@@ -40,7 +40,7 @@ const PoweredByBadge = () => {
                 whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
                 className="pointer-events-auto absolute bottom-4 right-4 bg-black/75 text-white px-[14px] py-[6px] rounded-full text-xs font-semibold no-underline backdrop-blur flex items-center gap-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.3)] cursor-grab touch-none"
             >
-                ⚡ Powered by vibeX
+                ⚡ Powered by AladdinX
             </motion.a>
         </div>
     );
