@@ -840,7 +840,7 @@ function createAuth(http, cfg) {
               if (gatewayBaseUrl) {
                 gatewayBaseUrl = `${gatewayBaseUrl}/auth`;
               } else {
-                gatewayBaseUrl = "https://stg.vibe-x.app/api/modules/auth";
+                gatewayBaseUrl = "https://stg.aladdinx.app/api/modules/auth";
               }
               window.location.href = `${gatewayBaseUrl}/login/${provider}?appId=${cfg.appId}&redirectUri=${encodeURIComponent(
                 callbackUri
