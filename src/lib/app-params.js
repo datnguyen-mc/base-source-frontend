@@ -43,7 +43,7 @@ const getAppParams = () => {
             defaultValue: import.meta.env.VITE_VIBEX_APP_ID,
         }),
         serverUrl: getAppParamValue('server_url', {
-            defaultValue: "https://dev.aladdinx.app/v1" || import.meta.env.VITE_VIBEX_BACKEND_URL,
+            defaultValue: import.meta.env.VITE_VIBEX_BACKEND_URL || "https://dev-app.aladdinx.app/v1",
         }),
         token: getAppParamValue('access_token', { removeFromUrl: true }),
         fromUrl: getAppParamValue('from_url', {

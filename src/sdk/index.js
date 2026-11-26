@@ -836,12 +836,12 @@ function createAuth(http, cfg) {
 
               // 3. Xử lý các provider khác qua Gateway
               const callbackUri = options.callbackUri || "/auth/callback";
-              let gatewayBaseUrl = cfg.authServerUrl;
-              if (gatewayBaseUrl) {
-                gatewayBaseUrl = `${gatewayBaseUrl}/auth`;
-              } else {
-                gatewayBaseUrl = "https://stg.aladdinx.app/api/modules/auth";
-              }
+              // The module gateway of this app's own API (/v1/api/modules on the
+              // serverUrl host), so the app stays in its own environment and domain.
+              const gatewayBaseUrl = `${
+                cfg.authServerUrl ||
+                `${new URL(http.getConfig().serverUrl).origin}/v1/api/modules`
+              }/auth`;
               window.location.href = `${gatewayBaseUrl}/login/${provider}?appId=${cfg.appId}&redirectUri=${encodeURIComponent(
                 callbackUri
               )}`;
@@ -1456,7 +1456,10 @@ export function createClient(config) {
     functions: createFunctions(httpFunctions),
     rbac: createRbac(httpFunctions),
     api: createApi(config, () => refreshAppSession(http)),
-    auth: createAuth(http, config),
+    auth: createAuth(http, {
+      ...config,
+      authServerUrl: config.authServerUrl || authServerUrl,
+    }),
     setToken: (t) => {
       http.setToken(t, true);
       httpAuth.setToken(t, true);
