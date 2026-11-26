@@ -17,7 +17,7 @@ const PoweredByBadge = () => {
             className="fixed inset-0 pointer-events-none z-[9999]"
         >
             <motion.a
-                href="https://vibe-x.app"
+                href="https://aladdinx.app"
                 target="_blank"
                 rel="noopener noreferrer"
                 drag
